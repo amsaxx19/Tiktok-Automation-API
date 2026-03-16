@@ -1,4 +1,5 @@
-scrapling[all]
+httpx
 fastapi
 uvicorn
-httpx
+beautifulsoup4
+lxml

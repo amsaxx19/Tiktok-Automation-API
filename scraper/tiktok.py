@@ -1,6 +1,7 @@
 import json
 import re
 from urllib.parse import quote
+from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
@@ -19,29 +20,36 @@ class TikTokScraper(BaseScraper):
         date_to: str | None = None,
     ) -> list[VideoResult]:
         print(f"[TikTok] Searching for: {keyword}")
-        encoded = quote(keyword)
-        url = f"https://www.tiktok.com/search?q={encoded}"
 
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
-        if response.status != 200:
-            print(f"[TikTok] Failed with status {response.status}")
+        # TikTok search page requires JS, use Google as discovery
+        encoded = quote(f"site:tiktok.com/*/video {keyword}")
+        url = f"https://www.google.com/search?q={encoded}&num=30"
+
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
+            print(f"[TikTok] Google search failed with status {resp.status_code}")
             return []
 
-        video_links = response.css('a[href*="/video/"]')
+        soup = BeautifulSoup(resp.text, "lxml")
         urls = []
         seen = set()
-        for link in video_links:
-            href = link.attrib.get("href", "")
-            if "/video/" in href and href not in seen:
-                seen.add(href)
-                urls.append(href)
-            if len(urls) >= max_results * 2:  # Fetch extra for filtering
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "tiktok.com" in href and "/video/" in href:
+                if "url?q=" in href:
+                    href = href.split("url?q=")[1].split("&")[0]
+                href = href.split("#")[0]
+                vid_match = re.search(r"/video/(\d+)", href)
+                if vid_match and vid_match.group(1) not in seen:
+                    seen.add(vid_match.group(1))
+                    urls.append(href)
+            if len(urls) >= max_results * 2:
                 break
 
         print(f"[TikTok] Found {len(urls)} video URLs, fetching details...")
 
         results = []
-        for i, video_url in enumerate(urls):
+        for video_url in urls:
             if len(results) >= max_results:
                 break
             try:
@@ -69,28 +77,36 @@ class TikTokScraper(BaseScraper):
     ) -> list[VideoResult]:
         username = username.lstrip("@")
         print(f"[TikTok] Scraping profile: @{username}")
-        url = f"https://www.tiktok.com/@{username}"
 
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
-        if response.status != 200:
-            print(f"[TikTok] Failed to load profile with status {response.status}")
+        # Use Google to discover profile videos
+        encoded = quote(f"site:tiktok.com/@{username}/video")
+        url = f"https://www.google.com/search?q={encoded}&num=30"
+
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
+            print(f"[TikTok] Google search failed with status {resp.status_code}")
             return []
 
-        video_links = response.css('a[href*="/video/"]')
+        soup = BeautifulSoup(resp.text, "lxml")
         urls = []
         seen = set()
-        for link in video_links:
-            href = link.attrib.get("href", "")
-            if "/video/" in href and href not in seen:
-                seen.add(href)
-                urls.append(href)
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "tiktok.com" in href and "/video/" in href:
+                if "url?q=" in href:
+                    href = href.split("url?q=")[1].split("&")[0]
+                href = href.split("#")[0]
+                vid_match = re.search(r"/video/(\d+)", href)
+                if vid_match and vid_match.group(1) not in seen:
+                    seen.add(vid_match.group(1))
+                    urls.append(href)
             if len(urls) >= max_results:
                 break
 
-        print(f"[TikTok] Found {len(urls)} videos on profile, fetching details...")
+        print(f"[TikTok] Found {len(urls)} videos, fetching details...")
 
         results = []
-        for i, video_url in enumerate(urls):
+        for video_url in urls:
             try:
                 result = self._scrape_video(video_url, f"@{username}")
                 if result:
@@ -108,15 +124,16 @@ class TikTokScraper(BaseScraper):
 
     def scrape_comments(self, video_url: str, max_comments: int = 50) -> list[dict]:
         print(f"[TikTok] Scraping comments from: {video_url}")
-        response = self.fetch_page(video_url, network_idle=True, timeout=30000)
-        if response.status != 200:
+        resp = self.fetch_page(video_url)
+        if resp.status_code != 200:
             return []
 
-        scripts = response.css('script#__UNIVERSAL_DATA_FOR_REHYDRATION__')
-        if not scripts:
+        soup = BeautifulSoup(resp.text, "lxml")
+        script = soup.find("script", id="__UNIVERSAL_DATA_FOR_REHYDRATION__")
+        if not script or not script.string:
             return []
 
-        data = json.loads(scripts[0].text)
+        data = json.loads(script.string)
         comment_data = data.get("__DEFAULT_SCOPE__", {}).get("webapp.video-detail", {})
         comments_list = comment_data.get("commentList", [])
 
@@ -131,60 +148,80 @@ class TikTokScraper(BaseScraper):
                 "create_time": c.get("createTime", ""),
             })
 
-        # If comments weren't in hydration data, try DOM extraction
-        if not comments:
-            comment_els = response.css('div[class*="CommentItem"], div[data-e2e="comment-level-1"]')
-            for el in comment_els[:max_comments]:
-                text_els = el.css('p[data-e2e="comment-level-1"] span, span[data-e2e="comment-level-1"]')
-                user_els = el.css('a[data-e2e="comment-username-1"], span[data-e2e="comment-username-1"]')
-                text = text_els[0].text if text_els else ""
-                user = user_els[0].text if user_els else ""
-                if text:
-                    comments.append({"user": user, "text": text, "likes": 0, "replies": 0})
-
         print(f"[TikTok] Extracted {len(comments)} comments")
         return comments
 
     def _scrape_video(self, url: str, keyword: str) -> VideoResult | None:
-        response = self.fetch_page(url)
-        if response.status != 200:
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
             return None
 
-        scripts = response.css('script#__UNIVERSAL_DATA_FOR_REHYDRATION__')
-        if not scripts:
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        # Try hydration data first
+        script = soup.find("script", id="__UNIVERSAL_DATA_FOR_REHYDRATION__")
+        if script and script.string:
+            try:
+                data = json.loads(script.string)
+                video_detail = data.get("__DEFAULT_SCOPE__", {}).get("webapp.video-detail", {})
+                item = video_detail.get("itemInfo", {}).get("itemStruct", {})
+                if item:
+                    stats = item.get("stats", {})
+                    author = item.get("author", {})
+                    video = item.get("video", {})
+                    music = item.get("music", {})
+                    hashtags = re.findall(r"#(\w+)", item.get("desc", ""))
+
+                    return VideoResult(
+                        platform="tiktok",
+                        keyword=keyword,
+                        video_url=url,
+                        title=item.get("desc", "")[:100],
+                        description=item.get("desc", ""),
+                        author=author.get("uniqueId", ""),
+                        author_url=f"https://www.tiktok.com/@{author.get('uniqueId', '')}",
+                        views=stats.get("playCount"),
+                        likes=stats.get("diggCount"),
+                        comments=stats.get("commentCount"),
+                        shares=stats.get("shareCount"),
+                        saves=stats.get("collectCount"),
+                        duration=video.get("duration"),
+                        upload_date=item.get("createTime", ""),
+                        thumbnail=video.get("cover", ""),
+                        music=music.get("title", ""),
+                        hashtags=hashtags,
+                    )
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        # Fallback: extract from meta tags
+        meta = {}
+        for tag in soup.find_all("meta"):
+            prop = tag.get("property", "") or tag.get("name", "")
+            content = tag.get("content", "")
+            if prop and content:
+                meta[prop] = content
+
+        title = meta.get("og:title", "") or meta.get("twitter:title", "")
+        description = meta.get("og:description", "") or meta.get("description", "")
+        thumbnail = meta.get("og:image", "")
+
+        # Try to extract author from URL
+        author_match = re.search(r"tiktok\.com/@([^/]+)", url)
+        author = author_match.group(1) if author_match else ""
+
+        if not title and not description:
             return None
-
-        data = json.loads(scripts[0].text)
-        video_detail = data.get("__DEFAULT_SCOPE__", {}).get("webapp.video-detail", {})
-        item = video_detail.get("itemInfo", {}).get("itemStruct", {})
-        if not item:
-            return None
-
-        stats = item.get("stats", {})
-        author = item.get("author", {})
-        video = item.get("video", {})
-        music = item.get("music", {})
-
-        hashtags = re.findall(r"#(\w+)", item.get("desc", ""))
 
         return VideoResult(
             platform="tiktok",
             keyword=keyword,
             video_url=url,
-            title=item.get("desc", "")[:100],
-            description=item.get("desc", ""),
-            author=author.get("uniqueId", ""),
-            author_url=f"https://www.tiktok.com/@{author.get('uniqueId', '')}",
-            views=stats.get("playCount"),
-            likes=stats.get("diggCount"),
-            comments=stats.get("commentCount"),
-            shares=stats.get("shareCount"),
-            saves=stats.get("collectCount"),
-            duration=video.get("duration"),
-            upload_date=item.get("createTime", ""),
-            thumbnail=video.get("cover", ""),
-            music=music.get("title", ""),
-            hashtags=hashtags,
+            title=title[:100],
+            description=description,
+            author=author,
+            author_url=f"https://www.tiktok.com/@{author}" if author else "",
+            thumbnail=thumbnail,
         )
 
     @staticmethod

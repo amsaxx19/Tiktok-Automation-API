@@ -1,6 +1,7 @@
 import json
 import re
 from urllib.parse import quote
+from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
@@ -13,20 +14,19 @@ class YouTubeScraper(BaseScraper):
         encoded = quote(keyword)
         url = f"https://www.youtube.com/results?search_query={encoded}"
 
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
-        if response.status != 200:
-            print(f"[YouTube] Failed with status {response.status}")
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
+            print(f"[YouTube] Failed with status {resp.status_code}")
             return []
 
         # Extract ytInitialData from script tags
-        scripts = response.css("script")
         yt_data = None
-        for s in scripts:
-            text = s.text or ""
-            if "var ytInitialData = " in text:
-                json_str = text.split("var ytInitialData = ", 1)[1].rsplit(";", 1)[0]
-                yt_data = json.loads(json_str)
-                break
+        match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", resp.text, re.DOTALL)
+        if match:
+            try:
+                yt_data = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
 
         if not yt_data:
             print("[YouTube] Could not find ytInitialData")
