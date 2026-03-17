@@ -31,6 +31,11 @@ SCRAPERS = {
 }
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def landing():
     landing_file = STATIC_DIR / "landing.html"
@@ -756,16 +761,16 @@ async function doSearch() {
   const btn = document.getElementById('searchBtn');
   btn.disabled = true; btn.textContent = 'Lagi scraping...';
 
-  const params = new URLSearchParams({
-    q: raw,
-    platforms: platforms.join(','),
-    max: document.getElementById('maxResults').value || 5,
-    sort: document.getElementById('sortBy').value,
-  });
+  // Use URL API to properly construct the URL (avoids mobile browser issues with encoded newlines)
+  const url = new URL('/api/search', window.location.origin);
+  url.searchParams.set('q', raw.replace(/\r\n/g, '\n'));
+  url.searchParams.set('platforms', platforms.join(','));
+  url.searchParams.set('max', document.getElementById('maxResults').value || '5');
+  url.searchParams.set('sort', document.getElementById('sortBy').value);
   const minL = document.getElementById('minLikes').value;
   const maxL = document.getElementById('maxLikes').value;
-  if (minL) params.set('min_likes', minL);
-  if (maxL) params.set('max_likes', maxL);
+  if (minL) url.searchParams.set('min_likes', minL);
+  if (maxL) url.searchParams.set('max_likes', maxL);
 
   showStatus('searchStatus', 'Lagi scraping ' + platforms.join(', ') + '...');
   document.getElementById('searchStats').innerHTML = '';
@@ -773,7 +778,7 @@ async function doSearch() {
   document.getElementById('searchResults').innerHTML = '';
 
   try {
-    const resp = await fetch('/api/search?' + params);
+    const resp = await fetch(url);
     const data = await resp.json();
     if (data.error) { hideStatus('searchStatus', 'Error: ' + data.error); return; }
     hideStatus('searchStatus', `Selesai! ${data.total} hasil dalam ${data.elapsed}`);
@@ -800,12 +805,11 @@ async function doProfile() {
   document.getElementById('profileResults').innerHTML = '';
 
   try {
-    const params = new URLSearchParams({
-      username,
-      max: document.getElementById('profileMax').value || 10,
-      sort: document.getElementById('profileSort').value,
-    });
-    const resp = await fetch('/api/profile?' + params);
+    const url = new URL('/api/profile', window.location.origin);
+    url.searchParams.set('username', username);
+    url.searchParams.set('max', document.getElementById('profileMax').value || '10');
+    url.searchParams.set('sort', document.getElementById('profileSort').value);
+    const resp = await fetch(url);
     const data = await resp.json();
     hideStatus('profileStatus', `Selesai! ${data.total} video dalam ${data.elapsed}`);
     renderStats('profileStats', data.results);
@@ -829,11 +833,10 @@ async function doComments() {
   document.getElementById('commentResults').innerHTML = '';
 
   try {
-    const params = new URLSearchParams({
-      url,
-      max: document.getElementById('commentMax').value || 50,
-    });
-    const resp = await fetch('/api/comments?' + params);
+    const fetchUrl = new URL('/api/comments', window.location.origin);
+    fetchUrl.searchParams.set('url', url);
+    fetchUrl.searchParams.set('max', document.getElementById('commentMax').value || '50');
+    const resp = await fetch(fetchUrl);
     const data = await resp.json();
     hideStatus('commentStatus', `Selesai! ${data.total} komentar berhasil diambil`);
 
