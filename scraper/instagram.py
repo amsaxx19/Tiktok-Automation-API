@@ -1,6 +1,7 @@
 import json
 import re
 from urllib.parse import quote
+from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
@@ -10,12 +11,30 @@ class InstagramScraper(BaseScraper):
 
     def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
         print(f"[Instagram] Searching for: {keyword}")
-        urls = self._search_via_hashtag(keyword, max_results)
 
-        # Fallback to Google if hashtag page is login-walled or empty
-        if not urls:
-            print("[Instagram] Hashtag page blocked, falling back to Google discovery...")
-            urls = self._search_via_google(keyword, max_results)
+        # Instagram requires login for direct access, use Google discovery
+        encoded = quote(f"site:instagram.com/reel {keyword}")
+        url = f"https://www.google.com/search?q={encoded}&num=30"
+
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
+            print(f"[Instagram] Google search failed with status {resp.status_code}")
+            return []
+
+        soup = BeautifulSoup(resp.text, "lxml")
+        urls = []
+        seen = set()
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "instagram.com" in href and ("/reel/" in href or "/p/" in href):
+                if "url?q=" in href:
+                    href = href.split("url?q=")[1].split("&")[0]
+                href = href.split("#")[0]
+                if href not in seen:
+                    seen.add(href)
+                    urls.append(href)
+            if len(urls) >= max_results:
+                break
 
         print(f"[Instagram] Found {len(urls)} posts/reels, fetching details...")
 
@@ -31,52 +50,6 @@ class InstagramScraper(BaseScraper):
 
         return results
 
-    def _search_via_hashtag(self, keyword: str, max_results: int) -> list[str]:
-        tag = keyword.replace(" ", "").lower()
-        url = f"https://www.instagram.com/explore/tags/{quote(tag)}/"
-
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
-        if response.status != 200:
-            return []
-
-        reel_links = response.css('a[href*="/reel/"]')
-        post_links = response.css('a[href*="/p/"]')
-
-        urls = []
-        seen = set()
-        for link in list(reel_links) + list(post_links):
-            href = link.attrib.get("href", "")
-            if href and href not in seen:
-                seen.add(href)
-                full_url = f"https://www.instagram.com{href}" if href.startswith("/") else href
-                urls.append(full_url)
-            if len(urls) >= max_results:
-                break
-        return urls
-
-    def _search_via_google(self, keyword: str, max_results: int) -> list[str]:
-        encoded = quote(f"site:instagram.com/reel {keyword}")
-        url = f"https://www.google.com/search?q={encoded}&num=30"
-
-        response = self.fetch_page(url, network_idle=True, timeout=20000)
-        if response.status != 200:
-            return []
-
-        urls = []
-        seen = set()
-        for link in response.css("a"):
-            href = link.attrib.get("href", "")
-            if "instagram.com" in href and ("/reel/" in href or "/p/" in href):
-                if "url?q=" in href:
-                    href = href.split("url?q=")[1].split("&")[0]
-                href = href.split("#")[0]
-                if href not in seen:
-                    seen.add(href)
-                    urls.append(href)
-            if len(urls) >= max_results:
-                break
-        return urls
-
     @staticmethod
     def _parse_abbreviated(number_str: str, suffix: str | None) -> int | None:
         try:
@@ -87,15 +60,17 @@ class InstagramScraper(BaseScraper):
             return None
 
     def _scrape_post(self, url: str, keyword: str) -> VideoResult | None:
-        response = self.fetch_page(url, network_idle=True, timeout=20000)
-        if response.status != 200:
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
             return None
+
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # Extract data from meta tags
         meta = {}
-        for tag in response.css("meta"):
-            prop = tag.attrib.get("property", "") or tag.attrib.get("name", "")
-            content = tag.attrib.get("content", "")
+        for tag in soup.find_all("meta"):
+            prop = tag.get("property", "") or tag.get("name", "")
+            content = tag.get("content", "")
             if prop and content:
                 meta[prop] = content
 
@@ -104,8 +79,6 @@ class InstagramScraper(BaseScraper):
         thumbnail = meta.get("og:image", "") or meta.get("twitter:image", "")
         canonical_url = meta.get("og:url", url)
 
-        # Parse likes and comments from description
-        # Format: "498 likes, 3 comments - username on Date: "caption""
         likes = None
         comments = None
         author = ""
@@ -119,11 +92,10 @@ class InstagramScraper(BaseScraper):
         if comments_match:
             comments = self._parse_abbreviated(comments_match.group(1), comments_match.group(2))
 
-        author_match = re.search(r"[-–]\s*(\w+)\s+on\s+", description)
+        author_match = re.search(r"[-\u2013]\s*(\w+)\s+on\s+", description)
         if author_match:
             author = author_match.group(1)
 
-        # Extract caption from title
         if " on Instagram:" in title:
             parts = title.split(" on Instagram:", 1)
             if len(parts) == 2:
@@ -133,7 +105,6 @@ class InstagramScraper(BaseScraper):
 
         hashtags = re.findall(r"#(\w+)", description + caption)
 
-        # Also try extracting from keywords meta tag
         ig_keywords = meta.get("keywords", "")
         if ig_keywords and not hashtags:
             hashtags = [k.strip() for k in ig_keywords.split(",") if k.strip()]

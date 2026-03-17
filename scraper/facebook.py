@@ -1,6 +1,6 @@
-import json
 import re
 from urllib.parse import quote
+from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
@@ -10,94 +10,99 @@ class FacebookScraper(BaseScraper):
 
     def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
         print(f"[Facebook] Searching for: {keyword}")
-        encoded = quote(keyword)
-        url = f"https://en-gb.facebook.com/watch/explore/{encoded}/"
 
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
-        if response.status != 200:
-            print(f"[Facebook] Failed with status {response.status}")
+        # Facebook requires login for most pages, use Google discovery
+        encoded = quote(f"site:facebook.com/watch {keyword}")
+        url = f"https://www.google.com/search?q={encoded}&num=30"
+
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
+            print(f"[Facebook] Google search failed with status {resp.status_code}")
             return []
 
-        # Extract video/reel URLs
-        video_links = response.css('a[href*="/videos/"], a[href*="/reel/"]')
-
-        results = []
+        soup = BeautifulSoup(resp.text, "lxml")
+        urls = []
         seen = set()
-
-        for link in video_links:
-            href = link.attrib.get("href", "")
-            if not href or href in seen or href == "/watch/":
-                continue
-            seen.add(href)
-
-            full_url = f"https://www.facebook.com{href}" if href.startswith("/") else href
-
-            # Try to get the parent container's text for stats
-            result = VideoResult(
-                platform="facebook",
-                keyword=keyword,
-                video_url=full_url,
-            )
-            results.append(result)
-
-            if len(results) >= max_results:
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if "facebook.com" in href and ("/videos/" in href or "/reel/" in href or "/watch" in href):
+                if "url?q=" in href:
+                    href = href.split("url?q=")[1].split("&")[0]
+                href = href.split("#")[0]
+                if href not in seen:
+                    seen.add(href)
+                    urls.append(href)
+            if len(urls) >= max_results:
                 break
 
-        # Extract view counts from page spans
-        # Facebook shows "date · views" pattern near video cards
-        spans = response.css("span")
-        view_data = []
-        for span in spans:
-            text = span.text or ""
-            if re.search(r"[\d.]+[KMB]?\s*views?", text, re.IGNORECASE):
-                views_match = re.search(r"([\d.]+)\s*([KMB]?)\s*views?", text, re.IGNORECASE)
-                if views_match:
-                    view_data.append(self._parse_abbreviated(views_match.group(1), views_match.group(2)))
+        print(f"[Facebook] Found {len(urls)} video URLs, fetching details...")
 
-        # Map view counts to results (they appear in order)
-        for i, views in enumerate(view_data):
-            if i < len(results):
-                results[i].views = views
-
-        print(f"[Facebook] Found {len(results)} videos")
-
-        # Fetch details for each video
-        for i, result in enumerate(results):
+        results = []
+        for i, video_url in enumerate(urls):
             try:
-                self._enrich_video(result)
-                if result.title or result.author:
-                    print(f"[Facebook] ({i+1}/{len(results)}) {result.author} - {result.views} views")
+                result = self._scrape_video(video_url, keyword)
+                if result:
+                    results.append(result)
+                    print(f"[Facebook] ({i+1}/{len(urls)}) {result.author} - {result.views} views")
             except Exception as e:
-                print(f"[Facebook] Error enriching {result.video_url}: {e}")
+                print(f"[Facebook] Error scraping {video_url}: {e}")
 
         return results
 
-    def _enrich_video(self, result: VideoResult):
-        response = self.fetch_page(result.video_url, network_idle=True, timeout=20000)
-        if response.status != 200:
-            return
+    def _scrape_video(self, url: str, keyword: str) -> VideoResult | None:
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(resp.text, "lxml")
 
         meta = {}
-        for tag in response.css("meta"):
-            prop = tag.attrib.get("property", "") or tag.attrib.get("name", "")
-            content = tag.attrib.get("content", "")
+        for tag in soup.find_all("meta"):
+            prop = tag.get("property", "") or tag.get("name", "")
+            content = tag.get("content", "")
             if prop and content:
                 meta[prop] = content
 
-        result.title = meta.get("og:title", "")[:100]
-        result.description = meta.get("og:description", "")
-        result.thumbnail = meta.get("og:image", "")
+        title = meta.get("og:title", "")[:100]
+        description = meta.get("og:description", "")
+        thumbnail = meta.get("og:image", "")
 
-        # Try to extract author from og:title or URL
-        if not result.author:
-            url_match = re.search(r"facebook\.com/([^/]+)/", result.video_url)
-            if url_match:
-                result.author = url_match.group(1)
+        author = ""
+        url_match = re.search(r"facebook\.com/([^/]+)/", url)
+        if url_match:
+            author = url_match.group(1)
+
+        # Try to extract view count from description
+        views = None
+        views_match = re.search(r"([\d,.]+)\s*([KMB])?\s*views?", description, re.IGNORECASE)
+        if views_match:
+            views = self._parse_abbreviated(views_match.group(1), views_match.group(2) or "")
+
+        if not title and not description:
+            # Still return basic result from URL
+            return VideoResult(
+                platform="facebook",
+                keyword=keyword,
+                video_url=url,
+                author=author,
+            )
+
+        return VideoResult(
+            platform="facebook",
+            keyword=keyword,
+            video_url=url,
+            title=title,
+            description=description,
+            author=author,
+            author_url=f"https://www.facebook.com/{author}" if author else "",
+            views=views,
+            thumbnail=thumbnail,
+        )
 
     @staticmethod
     def _parse_abbreviated(number_str: str, suffix: str) -> int | None:
         try:
-            num = float(number_str)
+            num = float(number_str.replace(",", ""))
             multiplier = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(suffix.upper(), 1)
             return int(num * multiplier)
         except ValueError:

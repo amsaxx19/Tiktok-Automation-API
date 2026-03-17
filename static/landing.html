@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScrapeFlow - Riset Sosmed Tercepat di Indonesia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-card-hover: #1a1a25;
+  --bg-elevated: #16161f;
+  --border: #1e1e2e;
+  --border-hover: #2e2e42;
+  --text: #f0f0f5;
+  --text-secondary: #9d9db5;
+  --text-muted: #5c5c7a;
+  --primary: #7c5cfc;
+  --primary-hover: #9b82fc;
+  --primary-glow: rgba(124,92,252,0.15);
+  --accent-green: #34d399;
+  --accent-pink: #f472b6;
+  --accent-orange: #fb923c;
+  --accent-blue: #60a5fa;
+  --accent-tiktok: #ff0050;
+  --accent-youtube: #ff0000;
+  --accent-instagram: #e040fb;
+  --accent-twitter: #1d9bf0;
+  --accent-facebook: #1877f2;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+/* Noise texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(124,92,252,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(244,114,182,0.04) 0%, transparent 50%),
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.015) 1px, transparent 0);
+  background-size: 100% 100%, 100% 100%, 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container { max-width: 1100px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+/* ===== NAVBAR ===== */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 16px 24px;
+  backdrop-filter: blur(20px);
+  background: rgba(10,10,15,0.85);
+  border-bottom: 1px solid var(--border);
+}
+.navbar .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-logo {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  text-decoration: none;
+  color: var(--text);
+}
+.nav-logo span { color: var(--primary); }
+.nav-logo .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  margin-left: 4px;
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.nav-links { display: flex; gap: 4px; align-items: center; }
+.nav-links a {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.nav-links a:hover { color: var(--text); background: var(--bg-card); }
+.nav-cta {
+  padding: 10px 22px !important;
+  background: var(--primary) !important;
+  color: white !important;
+  border-radius: var(--radius-sm) !important;
+  font-weight: 600 !important;
+}
+.nav-cta:hover { background: var(--primary-hover) !important; }
+
+@media (max-width: 768px) {
+  .nav-links a:not(.nav-cta) { display: none; }
+}
+
+/* ===== HERO ===== */
+.hero {
+  padding: 140px 0 80px;
+  text-align: center;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 28px;
+}
+.hero-badge .badge-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+.hero h1 {
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 1.05;
+  margin-bottom: 20px;
+}
+.hero h1 .gradient {
+  background: linear-gradient(135deg, #7c5cfc 0%, #f472b6 50%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  color: var(--text-secondary);
+  font-size: 18px;
+  max-width: 520px;
+  margin: 0 auto 36px;
+  line-height: 1.7;
+}
+.hero-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn {
+  padding: 14px 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+.btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover { border-color: var(--border-hover); color: var(--text); }
+.hero-note {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ===== PLATFORM MARQUEE ===== */
+.platforms-bar {
+  padding: 32px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.platforms-bar p {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 20px;
+}
+.platform-icons {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+.platform-icon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.3s;
+}
+.platform-icon:hover { color: var(--text); transform: scale(1.05); }
+.platform-icon .pi-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* ===== TOOL CARDS (Jatevo style) ===== */
+.tools-section {
+  padding: 80px 0;
+}
+.section-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+.section-tag {
+  display: inline-block;
+  padding: 4px 14px;
+  background: var(--primary-glow);
+  color: var(--primary-hover);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+}
+.section-header h2 {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 12px;
+}
+.section-header p {
+  color: var(--text-secondary);
+  font-size: 16px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+.tool-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+.tool-card:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+.tool-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.tool-card.tiktok::before { background: var(--accent-tiktok); }
+.tool-card.multi::before { background: linear-gradient(90deg, var(--accent-tiktok), var(--accent-youtube), var(--accent-instagram), var(--accent-twitter), var(--accent-facebook)); }
+.tool-card.comments::before { background: var(--accent-green); }
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.tool-name {
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tool-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-green);
+}
+.tool-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.tool-endpoint {
+  display: inline-block;
+  padding: 6px 12px;
+  background: var(--bg);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+}
+.tool-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.tag-free { background: rgba(52,211,153,0.1); color: var(--accent-green); }
+.tag-pro { background: rgba(124,92,252,0.1); color: var(--primary-hover); }
+
+/* ===== HOW IT WORKS ===== */
+.how-section {
+  padding: 80px 0;
+  border-top: 1px solid var(--border);
+}
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+@media (max-width: 768px) { .steps-grid { grid-template-columns: 1fr; } }
+.step-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  text-align: center;
+  transition: all 0.3s;
+}
+.step-card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+.step-number {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary-glow);
+  color: var(--primary);
+  font-size: 20px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.step-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.step-card p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ===== PRICING ===== */
+.pricing-section {
+  padding: 80px 0;
+  border-top: 1px solid var(--border);
+}
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.price-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  transition: all 0.3s;
+  position: relative;
+}
+.price-card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+.price-card.popular {
+  border-color: var(--primary);
+  background: linear-gradient(180deg, rgba(124,92,252,0.05) 0%, var(--bg-card) 100%);
+}
+.popular-tag {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 16px;
+  background: var(--primary);
+  color: white;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.price-tier {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.price-amount {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 4px;
+}
+.price-amount span {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.price-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+.price-features {
+  list-style: none;
+  margin-bottom: 28px;
+}
+.price-features li {
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.price-features li::before {
+  content: '✓';
+  color: var(--accent-green);
+  font-weight: 700;
+  font-size: 13px;
+}
+.price-btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  text-decoration: none;
+}
+.price-btn:hover { border-color: var(--primary); color: var(--primary-hover); }
+.price-card.popular .price-btn {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+.price-card.popular .price-btn:hover { background: var(--primary-hover); }
+
+/* ===== SOCIAL PROOF ===== */
+.proof-section {
+  padding: 60px 0;
+  border-top: 1px solid var(--border);
+}
+.proof-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  text-align: center;
+}
+@media (max-width: 640px) { .proof-stats { grid-template-columns: repeat(2, 1fr); } }
+.proof-stat .value {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, var(--primary), var(--accent-pink));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.proof-stat .label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ===== FAQ ===== */
+.faq-section {
+  padding: 80px 0;
+  border-top: 1px solid var(--border);
+}
+.faq-list {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  padding: 20px 0;
+}
+.faq-q {
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.faq-q::after {
+  content: '+';
+  font-size: 20px;
+  color: var(--text-muted);
+  transition: transform 0.3s;
+  flex-shrink: 0;
+}
+.faq-item.open .faq-q::after { content: '−'; }
+.faq-a {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+.faq-item.open .faq-a { max-height: 200px; padding-top: 12px; }
+
+/* ===== CTA ===== */
+.cta-section {
+  padding: 80px 0;
+  text-align: center;
+}
+.cta-box {
+  background: linear-gradient(135deg, rgba(124,92,252,0.1) 0%, rgba(244,114,182,0.05) 100%);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 60px 40px;
+}
+.cta-box h2 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 12px;
+}
+.cta-box p {
+  color: var(--text-secondary);
+  font-size: 16px;
+  margin-bottom: 28px;
+}
+
+/* ===== FOOTER ===== */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 40px 0;
+  text-align: center;
+}
+footer p {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+footer .footer-links {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+footer .footer-links a {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+footer .footer-links a:hover { color: var(--text); }
+
+/* ===== PAYMENT BADGES ===== */
+.payment-methods {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.pay-badge {
+  padding: 6px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="container">
+    <a href="#" class="nav-logo">Scrape<span>Flow</span><span class="dot"></span></a>
+    <div class="nav-links">
+      <a href="#tools">Tools</a>
+      <a href="#pricing">Harga</a>
+      <a href="#faq">FAQ</a>
+      <a href="/app" class="nav-cta">Coba Gratis</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">
+      <span class="badge-dot">⚡</span>
+      Gratis untuk 10 pencarian per hari
+    </div>
+    <h1>Riset Sosmed<br><span class="gradient">Dalam Hitungan Detik</span></h1>
+    <p>Scrape data dari TikTok, YouTube, Instagram, Twitter & Facebook sekaligus. Tanpa ribet, tanpa API key, langsung gas.</p>
+    <div class="hero-buttons">
+      <a href="/app" class="btn btn-primary">Mulai Gratis Sekarang →</a>
+      <a href="#tools" class="btn btn-outline">Lihat Fitur</a>
+    </div>
+    <p class="hero-note">Ga perlu kartu kredit · Setup 0 detik · Langsung pakai</p>
+  </div>
+</section>
+
+<!-- PLATFORM BAR -->
+<section class="platforms-bar">
+  <div class="container">
+    <p>Support semua platform populer</p>
+    <div class="platform-icons">
+      <div class="platform-icon"><span class="pi-dot" style="background:var(--accent-tiktok)"></span> TikTok</div>
+      <div class="platform-icon"><span class="pi-dot" style="background:var(--accent-youtube)"></span> YouTube</div>
+      <div class="platform-icon"><span class="pi-dot" style="background:var(--accent-instagram)"></span> Instagram</div>
+      <div class="platform-icon"><span class="pi-dot" style="background:var(--accent-twitter)"></span> Twitter/X</div>
+      <div class="platform-icon"><span class="pi-dot" style="background:var(--accent-facebook)"></span> Facebook</div>
+    </div>
+  </div>
+</section>
+
+<!-- TOOLS (Jatevo-style cards) -->
+<section class="tools-section" id="tools">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Tools</span>
+      <h2>Semua yang Kamu Butuhkan</h2>
+      <p>Pilih tools yang sesuai kebutuhanmu. Mau riset konten viral? Stalk kompetitor? Analisis komentar? Semua bisa.</p>
+    </div>
+
+    <div class="tools-grid">
+      <div class="tool-card multi">
+        <div class="tool-header">
+          <span class="tool-name">Multi Search</span>
+          <span class="tool-price">GRATIS</span>
+        </div>
+        <p class="tool-desc">Cari konten dari 5 platform sekaligus pakai keyword. Cocok buat riset ide konten & trending topics.</p>
+        <span class="tool-endpoint">/api/search</span>
+        <span class="tool-tag tag-free">Free Tier</span>
+      </div>
+
+      <div class="tool-card tiktok">
+        <div class="tool-header">
+          <span class="tool-name">Profile Scraper</span>
+          <span class="tool-price">PRO</span>
+        </div>
+        <p class="tool-desc">Ambil semua video dari profil TikTok manapun. Lihat views, likes, shares, dan performa setiap video.</p>
+        <span class="tool-endpoint">/api/profile</span>
+        <span class="tool-tag tag-pro">Pro Only</span>
+      </div>
+
+      <div class="tool-card comments">
+        <div class="tool-header">
+          <span class="tool-name">Comment Extractor</span>
+          <span class="tool-price">PRO</span>
+        </div>
+        <p class="tool-desc">Extract sampai 200 komentar dari video TikTok. Pahami audience & sentimen pasar kamu.</p>
+        <span class="tool-endpoint">/api/comments</span>
+        <span class="tool-tag tag-pro">Pro Only</span>
+      </div>
+
+      <div class="tool-card multi">
+        <div class="tool-header">
+          <span class="tool-name">Export Data</span>
+          <span class="tool-price">GRATIS</span>
+        </div>
+        <p class="tool-desc">Download hasil scraping dalam format CSV atau JSON. Langsung bisa dipakai di Excel atau Google Sheets.</p>
+        <span class="tool-endpoint">CSV / JSON</span>
+        <span class="tool-tag tag-free">Free Tier</span>
+      </div>
+
+      <div class="tool-card multi">
+        <div class="tool-header">
+          <span class="tool-name">Bulk Keywords</span>
+          <span class="tool-price">PRO</span>
+        </div>
+        <p class="tool-desc">Search banyak keyword sekaligus dalam satu kali jalan. Hemat waktu riset dari berjam-jam jadi beberapa menit.</p>
+        <span class="tool-endpoint">/api/search?q=multi</span>
+        <span class="tool-tag tag-pro">Pro Only</span>
+      </div>
+
+      <div class="tool-card multi">
+        <div class="tool-header">
+          <span class="tool-name">API Access</span>
+          <span class="tool-price">BISNIS</span>
+        </div>
+        <p class="tool-desc">Akses API langsung dari aplikasi kamu. Cocok buat developer & agency yang mau integrasi ke sistem sendiri.</p>
+        <span class="tool-endpoint">REST API</span>
+        <span class="tool-tag tag-pro">Business</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-section">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Cara Pakai</span>
+      <h2>Gampang Banget, Serius</h2>
+      <p>3 langkah doang, ga perlu skill teknis sama sekali.</p>
+    </div>
+
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <h3>Ketik Keyword</h3>
+        <p>Masukin kata kunci yang mau kamu riset. Bisa satu atau banyak keyword sekaligus.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <h3>Pilih Platform</h3>
+        <p>Centang platform mana aja yang mau di-scrape. TikTok, YouTube, IG — terserah kamu.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <h3>Download Hasilnya</h3>
+        <p>Dalam hitungan detik, data siap di-download dalam format CSV atau JSON. Beres!</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SOCIAL PROOF -->
+<section class="proof-section">
+  <div class="container">
+    <div class="proof-stats">
+      <div class="proof-stat">
+        <div class="value">5+</div>
+        <div class="label">Platform Didukung</div>
+      </div>
+      <div class="proof-stat">
+        <div class="value">0 dtk</div>
+        <div class="label">Setup Time</div>
+      </div>
+      <div class="proof-stat">
+        <div class="value">100%</div>
+        <div class="label">Tanpa API Key</div>
+      </div>
+      <div class="proof-stat">
+        <div class="value">∞</div>
+        <div class="label">Data Export</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing-section" id="pricing">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">Harga</span>
+      <h2>Harga Rakyat, Fitur Sultan</h2>
+      <p>Mulai gratis, upgrade kapanpun. Ga ada kontrak, bisa cancel kapan aja.</p>
+    </div>
+
+    <div class="pricing-grid">
+      <!-- FREE -->
+      <div class="price-card">
+        <div class="price-tier">Gratis</div>
+        <div class="price-amount">Rp 0 <span>/ selamanya</span></div>
+        <div class="price-note">Ga perlu kartu kredit</div>
+        <ul class="price-features">
+          <li>10 pencarian per hari</li>
+          <li>Semua 5 platform</li>
+          <li>5 hasil per pencarian</li>
+          <li>Export CSV & JSON</li>
+        </ul>
+        <a href="/app" class="price-btn">Mulai Sekarang</a>
+      </div>
+
+      <!-- PRO -->
+      <div class="price-card popular">
+        <span class="popular-tag">Paling Laris</span>
+        <div class="price-tier">Pro</div>
+        <div class="price-amount">Rp 49rb <span>/ bulan</span></div>
+        <div class="price-note">Kurang dari secangkir kopi per hari</div>
+        <ul class="price-features">
+          <li>100 pencarian per hari</li>
+          <li>50 hasil per pencarian</li>
+          <li>Profile Scraper</li>
+          <li>Comment Extractor</li>
+          <li>Bulk Keywords</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="/app" class="price-btn">Coba Pro Gratis 7 Hari</a>
+      </div>
+
+      <!-- BUSINESS -->
+      <div class="price-card">
+        <div class="price-tier">Bisnis</div>
+        <div class="price-amount">Rp 199rb <span>/ bulan</span></div>
+        <div class="price-note">Cocok buat agency & tim</div>
+        <ul class="price-features">
+          <li>Unlimited pencarian</li>
+          <li>API Access (REST)</li>
+          <li>White-label ready</li>
+          <li>Custom integration</li>
+          <li>Dedicated support 24/7</li>
+          <li>Multi-user dashboard</li>
+        </ul>
+        <a href="/app" class="price-btn">Hubungi Kami</a>
+      </div>
+    </div>
+
+    <div class="payment-methods">
+      <span class="pay-badge">QRIS</span>
+      <span class="pay-badge">GoPay</span>
+      <span class="pay-badge">OVO</span>
+      <span class="pay-badge">Dana</span>
+      <span class="pay-badge">ShopeePay</span>
+      <span class="pay-badge">BCA</span>
+      <span class="pay-badge">Mandiri</span>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag">FAQ</span>
+      <h2>Pertanyaan yang Sering Ditanya</h2>
+    </div>
+
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Apakah ini legal?</div>
+        <div class="faq-a">ScrapeFlow hanya mengambil data yang tersedia secara publik di platform sosial media, sama seperti yang bisa kamu lihat di browser. Kami tidak mengakses data private atau melanggar ketentuan apapun.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Butuh skill teknis ga?</div>
+        <div class="faq-a">Ga sama sekali! Tinggal ketik keyword, pilih platform, klik tombol. Data langsung bisa di-download. Kalau kamu bisa pakai Google, kamu bisa pakai ScrapeFlow.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Bisa cancel subscription kapan aja?</div>
+        <div class="faq-a">Tentu! Ga ada kontrak atau commitment. Kamu bisa upgrade, downgrade, atau cancel kapanpun lewat dashboard. Langsung efektif, ga ribet.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Data yang di-scrape akurat ga?</div>
+        <div class="faq-a">Data yang kami ambil langsung dari halaman publik masing-masing platform, jadi seakurat data yang kamu lihat di aplikasi aslinya. Views, likes, comments — semua real-time.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Cocok buat siapa aja?</div>
+        <div class="faq-a">Content creator, affiliate marketer TikTok Shop, agency sosial media, seller online, researcher — siapapun yang butuh data sosial media untuk riset konten dan strategi.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Bayar pakai apa?</div>
+        <div class="faq-a">Support semua metode pembayaran Indonesia: QRIS, GoPay, OVO, Dana, ShopeePay, transfer bank (BCA, Mandiri, BRI, BNI), dan kartu kredit/debit.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-box">
+      <h2>Siap Mulai Riset?</h2>
+      <p>Join ratusan content creator & marketer Indonesia yang udah pakai ScrapeFlow.</p>
+      <a href="/app" class="btn btn-primary" style="font-size:17px;padding:16px 36px;">Coba Gratis Sekarang →</a>
+      <p class="hero-note" style="margin-top:16px;">Gratis selamanya untuk tier basic. Upgrade kapanpun.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-links">
+      <a href="#tools">Tools</a>
+      <a href="#pricing">Harga</a>
+      <a href="#faq">FAQ</a>
+      <a href="/app">Dashboard</a>
+    </div>
+    <p>ScrapeFlow &copy; 2026 · Built with ❤ di Indonesia</p>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,7 +1,7 @@
-import json
 import re
 from urllib.parse import quote
 import httpx
+from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
@@ -16,26 +16,22 @@ class TwitterScraper(BaseScraper):
         encoded = quote(f"site:x.com {keyword}")
         url = f"https://www.google.com/search?q={encoded}&num=30"
 
-        response = self.fetch_page(url, network_idle=True, timeout=20000)
-        if response.status != 200:
-            print(f"[Twitter/X] Google search failed with status {response.status}")
+        resp = self.fetch_page(url)
+        if resp.status_code != 200:
+            print(f"[Twitter/X] Google search failed with status {resp.status_code}")
             return []
 
-        # Extract x.com/twitter.com status links from Google results
-        all_links = response.css("a")
+        soup = BeautifulSoup(resp.text, "lxml")
         urls = []
         seen_ids = set()
-        for link in all_links:
-            href = link.attrib.get("href", "")
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
             if "/status/" in href and ("x.com" in href or "twitter.com" in href):
-                # Clean Google redirect URLs
                 if "url?q=" in href:
                     href = href.split("url?q=")[1].split("&")[0]
-                # Extract tweet ID to deduplicate
                 match = re.search(r"/status/(\d+)", href)
                 if match and match.group(1) not in seen_ids:
                     seen_ids.add(match.group(1))
-                    # Normalize URL (remove fragments)
                     clean_url = href.split("#")[0]
                     urls.append(clean_url)
             if len(urls) >= max_results:
@@ -62,7 +58,7 @@ class TwitterScraper(BaseScraper):
 
         author = match.group(1)
 
-        # Use oembed API via httpx (not browser) since it returns JSON
+        # Use oembed API (returns JSON, no browser needed)
         oembed_url = f"https://publish.twitter.com/oembed?url={url}"
         description = ""
         try:
