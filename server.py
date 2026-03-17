@@ -4,9 +4,11 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from pathlib import Path
 
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from scraper.tiktok import TikTokScraper
 from scraper.youtube import YouTubeScraper
@@ -15,8 +17,10 @@ from scraper.twitter import TwitterScraper
 from scraper.facebook import FacebookScraper
 from scraper.models import save_results
 
-app = FastAPI(title="Social Media Scraper")
+app = FastAPI(title="ScrapeFlow - Riset Sosmed Tercepat")
 executor = ThreadPoolExecutor(max_workers=5)
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 SCRAPERS = {
     "tiktok": TikTokScraper,
@@ -28,7 +32,13 @@ SCRAPERS = {
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
+async def landing():
+    landing_file = STATIC_DIR / "landing.html"
+    return HTMLResponse(landing_file.read_text(encoding="utf-8"))
+
+
+@app.get("/app", response_class=HTMLResponse)
+async def dashboard():
     return HTML_UI
 
 
@@ -154,48 +164,56 @@ async def download(file: str = Query(...)):
 
 
 HTML_UI = """<!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ScrapeFlow - Social Media Intelligence</title>
+<title>ScrapeFlow - Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #09090b;
-  --bg-card: #18181b;
-  --bg-card-hover: #1f1f23;
-  --bg-input: #18181b;
-  --border: #27272a;
-  --border-hover: #3f3f46;
-  --text: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --primary: #6366f1;
-  --primary-hover: #818cf8;
-  --primary-bg: rgba(99,102,241,0.1);
+  --bg: #0a0a0f;
+  --bg-card: #12121a;
+  --bg-card-hover: #1a1a25;
+  --bg-input: #12121a;
+  --border: #1e1e2e;
+  --border-hover: #2e2e42;
+  --text: #f0f0f5;
+  --text-secondary: #9d9db5;
+  --text-muted: #5c5c7a;
+  --primary: #7c5cfc;
+  --primary-hover: #9b82fc;
+  --primary-bg: rgba(124,92,252,0.12);
   --accent-tiktok: #ff0050;
   --accent-youtube: #ff0000;
   --accent-instagram: #e040fb;
   --accent-twitter: #1d9bf0;
   --accent-facebook: #1877f2;
-  --success: #22c55e;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-lg: 16px;
+  --success: #34d399;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 18px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
 /* Subtle grid background */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0);
-  background-size: 40px 40px;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(124,92,252,0.04) 0%, transparent 50%),
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,0.015) 1px, transparent 0);
+  background-size: 100% 100%, 32px 32px;
   pointer-events: none;
   z-index: 0;
 }
@@ -501,17 +519,17 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <div class="app">
 
 <nav>
-  <div class="logo">Scrape<span>Flow</span></div>
+  <div class="logo"><a href="/" style="text-decoration:none;color:var(--text)">Scrape<span>Flow</span></a></div>
   <div class="nav-links">
-    <button class="nav-link active" onclick="switchPage('search')">Search</button>
-    <button class="nav-link" onclick="switchPage('profile')">Profile</button>
-    <button class="nav-link" onclick="switchPage('comments')">Comments</button>
+    <button class="nav-link active" onclick="switchPage('search')">Cari Konten</button>
+    <button class="nav-link" onclick="switchPage('profile')">Profil</button>
+    <button class="nav-link" onclick="switchPage('comments')">Komentar</button>
   </div>
 </nav>
 
 <div class="hero">
-  <h1>Scrape <span class="gradient">Every Platform</span> in Seconds</h1>
-  <p>Search by keyword across TikTok, YouTube, Instagram, Twitter/X and Facebook. Free, open-source, no API keys.</p>
+  <h1>Riset <span class="gradient">Semua Platform</span> Sekaligus</h1>
+  <p>Cari konten viral dari TikTok, YouTube, Instagram, Twitter/X dan Facebook. Gratis, tanpa API key, langsung gas.</p>
 </div>
 
 <div class="main">
@@ -520,16 +538,16 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <div class="page active" id="page-search">
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:var(--primary-bg)">Q</div> Search Queries</div>
+    <div class="section-title"><div class="icon" style="background:var(--primary-bg)">🔍</div> Kata Kunci</div>
     <div class="form-group">
       <label class="form-label">Keywords</label>
-      <textarea id="keywords" placeholder="Enter keywords, one per line...&#10;resign dari kerja&#10;quit job start business&#10;side hustle"></textarea>
-      <div class="form-hint">Add multiple keywords (one per line) to bulk search across platforms.</div>
+      <textarea id="keywords" placeholder="Ketik keyword, satu per baris...&#10;resign dari kerja&#10;cara jualan di tiktok&#10;side hustle indonesia"></textarea>
+      <div class="form-hint">Bisa masukin banyak keyword sekaligus (satu per baris) buat riset lebih cepat.</div>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(168,85,247,0.1)">P</div> Platforms</div>
+    <div class="section-title"><div class="icon" style="background:rgba(168,85,247,0.1)">📱</div> Platform</div>
     <div class="chip-group">
       <div class="chip active" data-platform="tiktok" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-tiktok)"></span>TikTok</div>
       <div class="chip active" data-platform="youtube" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-youtube)"></span>YouTube</div>
@@ -540,19 +558,19 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   </div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(236,72,153,0.1)">F</div> Filters & Sorting</div>
+    <div class="section-title"><div class="icon" style="background:rgba(236,72,153,0.1)">⚙️</div> Filter & Urutan</div>
     <div class="grid-3">
       <div class="form-group">
-        <label class="form-label">Results per platform</label>
+        <label class="form-label">Jumlah hasil per platform</label>
         <input type="number" id="maxResults" value="5" min="1" max="50">
       </div>
       <div class="form-group">
-        <label class="form-label">Sort by</label>
+        <label class="form-label">Urut berdasarkan</label>
         <select id="sortBy">
-          <option value="relevance">Most relevant</option>
-          <option value="popular">Most views</option>
-          <option value="most_liked">Most liked</option>
-          <option value="latest">Latest</option>
+          <option value="relevance">Paling relevan</option>
+          <option value="popular">Views terbanyak</option>
+          <option value="most_liked">Likes terbanyak</option>
+          <option value="latest">Terbaru</option>
         </select>
       </div>
       <div class="form-group">
@@ -572,7 +590,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
     </div>
   </div>
 
-  <button class="btn btn-primary" id="searchBtn" onclick="doSearch()">Start Scraping</button>
+  <button class="btn btn-primary" id="searchBtn" onclick="doSearch()">Mulai Scraping 🚀</button>
 
   <div style="height:24px"></div>
   <div class="status-bar" id="searchStatus"><div class="spinner"></div><span id="searchStatusText"></span></div>
@@ -585,28 +603,28 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <div class="page" id="page-profile">
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">@</div> TikTok Profile Scraper</div>
+    <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">👤</div> TikTok Profile Scraper</div>
     <div class="grid-2">
       <div class="form-group">
         <label class="form-label">Username</label>
-        <input type="text" id="profileUsername" placeholder="@username or username">
+        <input type="text" id="profileUsername" placeholder="@username atau username">
       </div>
       <div class="form-group">
-        <label class="form-label">Max videos</label>
+        <label class="form-label">Maks video</label>
         <input type="number" id="profileMax" value="10" min="1" max="50">
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Video sorting</label>
+      <label class="form-label">Urutan video</label>
       <select id="profileSort">
-        <option value="latest">Latest</option>
-        <option value="popular">Popular</option>
-        <option value="oldest">Oldest</option>
+        <option value="latest">Terbaru</option>
+        <option value="popular">Terpopuler</option>
+        <option value="oldest">Terlama</option>
       </select>
     </div>
   </div>
 
-  <button class="btn btn-primary" id="profileBtn" onclick="doProfile()">Scrape Profile</button>
+  <button class="btn btn-primary" id="profileBtn" onclick="doProfile()">Scrape Profil 🚀</button>
 
   <div style="height:24px"></div>
   <div class="status-bar" id="profileStatus"><div class="spinner"></div><span id="profileStatusText"></span></div>
@@ -619,20 +637,20 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <div class="page" id="page-comments">
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">C</div> TikTok Comments Scraper</div>
+    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">💬</div> TikTok Comment Extractor</div>
     <div class="grid-2">
       <div class="form-group">
-        <label class="form-label">Video URL</label>
+        <label class="form-label">URL Video</label>
         <input type="text" id="commentUrl" placeholder="https://www.tiktok.com/@user/video/123...">
       </div>
       <div class="form-group">
-        <label class="form-label">Max comments</label>
+        <label class="form-label">Maks komentar</label>
         <input type="number" id="commentMax" value="50" min="1" max="200">
       </div>
     </div>
   </div>
 
-  <button class="btn btn-primary" id="commentBtn" onclick="doComments()">Scrape Comments</button>
+  <button class="btn btn-primary" id="commentBtn" onclick="doComments()">Ambil Komentar 🚀</button>
 
   <div style="height:24px"></div>
   <div class="status-bar" id="commentStatus"><div class="spinner"></div><span id="commentStatusText"></span></div>
@@ -705,7 +723,7 @@ function renderStats(containerId, results) {
     platforms[r.platform].views += r.views || 0;
   });
   let html = '<div class="stats-row">';
-  html += `<div class="stat-card"><div class="value" style="color:var(--primary)">${results.length}</div><div class="label">Total Results</div></div>`;
+  html += `<div class="stat-card"><div class="value" style="color:var(--primary)">${results.length}</div><div class="label">Total Hasil</div></div>`;
   for (const [p, s] of Object.entries(platforms)) {
     html += `<div class="stat-card ${p}"><div class="value">${s.count}</div><div class="label">${p} &middot; ${fmt(s.views)} views</div></div>`;
   }
@@ -733,10 +751,10 @@ async function doSearch() {
   const raw = document.getElementById('keywords').value.trim();
   if (!raw) return;
   const platforms = [...document.querySelectorAll('#page-search .chip.active')].map(c => c.dataset.platform);
-  if (!platforms.length) { alert('Select at least one platform'); return; }
+  if (!platforms.length) { alert('Pilih minimal satu platform dulu!'); return; }
 
   const btn = document.getElementById('searchBtn');
-  btn.disabled = true; btn.textContent = 'Scraping...';
+  btn.disabled = true; btn.textContent = 'Lagi scraping...';
 
   const params = new URLSearchParams({
     q: raw,
@@ -749,7 +767,7 @@ async function doSearch() {
   if (minL) params.set('min_likes', minL);
   if (maxL) params.set('max_likes', maxL);
 
-  showStatus('searchStatus', 'Scraping across ' + platforms.join(', ') + '...');
+  showStatus('searchStatus', 'Lagi scraping ' + platforms.join(', ') + '...');
   document.getElementById('searchStats').innerHTML = '';
   document.getElementById('searchDownloads').innerHTML = '';
   document.getElementById('searchResults').innerHTML = '';
@@ -758,14 +776,14 @@ async function doSearch() {
     const resp = await fetch('/api/search?' + params);
     const data = await resp.json();
     if (data.error) { hideStatus('searchStatus', 'Error: ' + data.error); return; }
-    hideStatus('searchStatus', `Done! ${data.total} results in ${data.elapsed}`);
+    hideStatus('searchStatus', `Selesai! ${data.total} hasil dalam ${data.elapsed}`);
     renderStats('searchStats', data.results);
     renderDownloads('searchDownloads', data.json_file, data.csv_file);
     renderCards('searchResults', data.results);
   } catch(e) {
     hideStatus('searchStatus', 'Error: ' + e.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Start Scraping';
+    btn.disabled = false; btn.textContent = 'Mulai Scraping 🚀';
   }
 }
 
@@ -775,8 +793,8 @@ async function doProfile() {
   if (!username) return;
 
   const btn = document.getElementById('profileBtn');
-  btn.disabled = true; btn.textContent = 'Scraping...';
-  showStatus('profileStatus', `Scraping @${username}...`);
+  btn.disabled = true; btn.textContent = 'Lagi scraping...';
+  showStatus('profileStatus', `Lagi scraping @${username}...`);
   document.getElementById('profileStats').innerHTML = '';
   document.getElementById('profileDownloads').innerHTML = '';
   document.getElementById('profileResults').innerHTML = '';
@@ -789,14 +807,14 @@ async function doProfile() {
     });
     const resp = await fetch('/api/profile?' + params);
     const data = await resp.json();
-    hideStatus('profileStatus', `Done! ${data.total} videos in ${data.elapsed}`);
+    hideStatus('profileStatus', `Selesai! ${data.total} video dalam ${data.elapsed}`);
     renderStats('profileStats', data.results);
     renderDownloads('profileDownloads', data.json_file, data.csv_file);
     renderCards('profileResults', data.results);
   } catch(e) {
     hideStatus('profileStatus', 'Error: ' + e.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Scrape Profile';
+    btn.disabled = false; btn.textContent = 'Scrape Profil 🚀';
   }
 }
 
@@ -806,8 +824,8 @@ async function doComments() {
   if (!url) return;
 
   const btn = document.getElementById('commentBtn');
-  btn.disabled = true; btn.textContent = 'Scraping...';
-  showStatus('commentStatus', 'Extracting comments...');
+  btn.disabled = true; btn.textContent = 'Lagi ngambil...';
+  showStatus('commentStatus', 'Lagi extract komentar...');
   document.getElementById('commentResults').innerHTML = '';
 
   try {
@@ -817,7 +835,7 @@ async function doComments() {
     });
     const resp = await fetch('/api/comments?' + params);
     const data = await resp.json();
-    hideStatus('commentStatus', `Done! ${data.total} comments extracted`);
+    hideStatus('commentStatus', `Selesai! ${data.total} komentar berhasil diambil`);
 
     document.getElementById('commentResults').innerHTML = data.comments.map(c => `
       <div class="comment-card">
@@ -825,11 +843,11 @@ async function doComments() {
         <div class="comment-text">${c.text}</div>
         <div class="comment-meta">${c.likes ? c.likes + ' likes' : ''} ${c.replies ? '&middot; ' + c.replies + ' replies' : ''}</div>
       </div>
-    `).join('') || '<p style="color:var(--text-muted);padding:20px">No comments found in page data. TikTok may load comments dynamically after scrolling.</p>';
+    `).join('') || '<p style="color:var(--text-muted);padding:20px">Komentar ga ketemu di data halaman. TikTok mungkin load komentar secara dinamis setelah scroll.</p>';
   } catch(e) {
     hideStatus('commentStatus', 'Error: ' + e.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Scrape Comments';
+    btn.disabled = false; btn.textContent = 'Ambil Komentar 🚀';
   }
 }
 </script>
