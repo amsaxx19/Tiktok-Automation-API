@@ -37,7 +37,8 @@
 
 ## What Still Needs Wiring
 
-- Supabase project keys and redirect URLs
+- Supabase project URL, publishable/anon key, and redirect URLs
 - Mayar product URLs or checkout endpoints
 - Webhook verification and idempotency
 - Per-plan quota enforcement in app routes
+- Optional: secure cookie / HTTPS-only production cookie flags

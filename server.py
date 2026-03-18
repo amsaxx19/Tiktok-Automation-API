@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
+import base64
+import json
 import os
 import re
 import time
@@ -7,8 +9,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from functools import partial
 
-from fastapi import FastAPI, Query
+import httpx
+from fastapi import Body, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
+from dotenv import load_dotenv
 
 from scraper.tiktok import TikTokScraper
 from scraper.youtube import YouTubeScraper
@@ -17,17 +21,25 @@ from scraper.twitter import TwitterScraper
 from scraper.facebook import FacebookScraper
 from scraper.models import save_results
 
+load_dotenv()
+
 app = FastAPI(title="Social Media Scraper")
 executor = ThreadPoolExecutor(max_workers=5)
 SCRAPE_TIMEOUT_SECONDS = int(os.getenv("SCRAPE_TIMEOUT_SECONDS", "45"))
 PROFILE_CACHE_TTL_SECONDS = int(os.getenv("PROFILE_CACHE_TTL_SECONDS", "900"))
 SEARCH_CACHE_TTL_SECONDS = int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "900"))
 COMMENTS_CACHE_TTL_SECONDS = int(os.getenv("COMMENTS_CACHE_TTL_SECONDS", "900"))
+AUTH_COOKIE_NAME = "sinyal_access_token"
+REFRESH_COOKIE_NAME = "sinyal_refresh_token"
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 PROFILE_CACHE: dict[tuple[str, int, str], tuple[float, dict]] = {}
 SEARCH_CACHE: dict[tuple, tuple[float, dict]] = {}
 COMMENTS_CACHE: dict[tuple[str, int], tuple[float, dict]] = {}
 PLATFORM_SEARCH_CACHE: dict[tuple, tuple[float, list]] = {}
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "") or os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
 SCRAPERS = {
     "tiktok": TikTokScraper,
@@ -178,6 +190,79 @@ def get_plan_catalog():
     return plans
 
 
+def supabase_auth_configured() -> bool:
+    return bool(SUPABASE_URL and SUPABASE_ANON_KEY)
+
+
+def supabase_headers(api_key: str | None = None) -> dict[str, str]:
+    key = api_key or SUPABASE_ANON_KEY
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+
+async def supabase_auth_request(path: str, payload: dict, api_key: str | None = None):
+    if not supabase_auth_configured():
+        return 503, {"error": "Supabase auth belum dikonfigurasi di environment."}
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.post(
+            f"{SUPABASE_URL}/auth/v1{path}",
+            headers=supabase_headers(api_key),
+            json=payload,
+        )
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"error": response.text}
+    return response.status_code, data
+
+
+def decode_jwt_payload(token: str) -> dict:
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return {}
+        payload = parts[1]
+        payload += "=" * (-len(payload) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload.encode()).decode())
+    except Exception:
+        return {}
+
+
+async def get_authenticated_user(request: Request) -> dict | None:
+    if not supabase_auth_configured():
+        return None
+
+    token = request.cookies.get(AUTH_COOKIE_NAME)
+    if not token:
+        return None
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.get(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers={
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {token}",
+            },
+        )
+    if response.status_code != 200:
+        return None
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+
+    jwt_payload = decode_jwt_payload(token)
+    return {
+        "id": data.get("id") or jwt_payload.get("sub"),
+        "email": data.get("email") or jwt_payload.get("email"),
+        "raw": data,
+    }
+
+
 def render_public_account_page(
     *,
     title: str,
@@ -192,6 +277,7 @@ def render_public_account_page(
     aside_body: str,
     aside_list: list[str],
     footer_note: str,
+    extra_script: str = "",
 ):
     aside_items = "".join(f"<li>{item}</li>" for item in aside_list)
     return f"""<!DOCTYPE html>
@@ -502,6 +588,7 @@ h1 {{
     </div>
   </div>
 </div>
+{extra_script}
 </body>
 </html>"""
 
@@ -860,10 +947,12 @@ async def signup_page():
         secondary_label="Sudah punya akun? Masuk di sini",
         secondary_href="/signin",
         form_fields="""
-        <div class="field"><label>Nama lengkap</label><input type="text" placeholder="Nama kamu atau nama tim"></div>
-        <div class="field"><label>Email kerja</label><input type="email" placeholder="nama@brand.com"></div>
-        <div class="field"><label>Password</label><input type="password" placeholder="Minimal 8 karakter"></div>
-        <div class="field"><label>Kamu pakai untuk apa?</label><select><option>Riset konten</option><option>Vetting creator</option><option>Agency / tim sosial media</option><option>UMKM / brand</option></select></div>
+        <div class="field"><label>Nama lengkap</label><input id="signupFullName" type="text" placeholder="Nama kamu atau nama tim"></div>
+        <div class="field"><label>Nama usaha / tim</label><input id="signupCompanyName" type="text" placeholder="Nama brand atau agency"></div>
+        <div class="field"><label>Email kerja</label><input id="signupEmail" type="email" placeholder="nama@brand.com"></div>
+        <div class="field"><label>Password</label><input id="signupPassword" type="password" placeholder="Minimal 8 karakter"></div>
+        <div class="field"><label>Kamu pakai untuk apa?</label><select id="signupUseCase"><option>Riset konten</option><option>Vetting creator</option><option>Agency / tim sosial media</option><option>UMKM / brand</option></select></div>
+        <div id="signupStatus" class="note">Begitu Supabase env diisi, form ini langsung daftar dan simpan session.</div>
         """,
         aside_title="Stack yang saya arahkan",
         aside_body="Untuk versi production, signup ini saya arahkan ke Supabase Auth. Jadi email login, session, reset password, dan proteksi route nggak perlu kita bangun dari nol, lalu status langganan dibaca dari Postgres.",
@@ -873,6 +962,33 @@ async def signup_page():
             "Billing: Setelah pembayaran Mayar valid, role atau plan user langsung aktif dari database.",
         ],
         footer_note="Versi sekarang masih page flow. Begitu kredensial auth siap, saya bisa sambungkan halaman ini ke backend sungguhan.",
+        extra_script="""
+        <script>
+        document.querySelector('.submit')?.addEventListener('click', async () => {
+          const status = document.getElementById('signupStatus');
+          status.textContent = 'Lagi bikin akun...';
+          const payload = {
+            full_name: document.getElementById('signupFullName').value,
+            company_name: document.getElementById('signupCompanyName').value,
+            email: document.getElementById('signupEmail').value,
+            password: document.getElementById('signupPassword').value,
+            onboarding_use_case: document.getElementById('signupUseCase').value,
+          };
+          const res = await fetch('/api/auth/signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            status.textContent = data.msg || data.error_description || data.error || 'Gagal daftar.';
+            return;
+          }
+          status.textContent = 'Akun berhasil dibuat. Mengarahkan ke app...';
+          window.location.href = '/app';
+        });
+        </script>
+        """,
     )
 
 
@@ -887,9 +1003,10 @@ async def signin_page():
         secondary_label="Belum punya akun? Daftar sekarang",
         secondary_href="/signup",
         form_fields="""
-        <div class="field"><label>Email</label><input type="email" placeholder="nama@brand.com"></div>
-        <div class="field"><label>Password</label><input type="password" placeholder="Masukkan password"></div>
+        <div class="field"><label>Email</label><input id="signinEmail" type="email" placeholder="nama@brand.com"></div>
+        <div class="field"><label>Password</label><input id="signinPassword" type="password" placeholder="Masukkan password"></div>
         <div class="field"><label>Mode kerja</label><select><option>Ingat saya di perangkat ini</option><option>Perangkat tim bersama</option></select></div>
+        <div id="signinStatus" class="note">Login akan aktif begitu kredensial Supabase sudah terpasang di environment.</div>
         """,
         aside_title="Yang akan dicek setelah login",
         aside_body="Sebagai fullstack flow, login bukan cuma buka halaman. Setelah user masuk, backend harus baca status plan, kuota, dan izin fitur dari Postgres yang sudah diupdate dari pembayaran Mayar.",
@@ -899,6 +1016,30 @@ async def signin_page():
             "Kalau billing bermasalah, arahkan user ke halaman payment tanpa muter-muter.",
         ],
         footer_note="Signin ini nanti paling aman pakai session/Auth provider, bukan custom token buatan sendiri tanpa fondasi yang jelas.",
+        extra_script="""
+        <script>
+        document.querySelector('.submit')?.addEventListener('click', async () => {
+          const status = document.getElementById('signinStatus');
+          status.textContent = 'Lagi masuk...';
+          const payload = {
+            email: document.getElementById('signinEmail').value,
+            password: document.getElementById('signinPassword').value,
+          };
+          const res = await fetch('/api/auth/signin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            status.textContent = data.msg || data.error_description || data.error || 'Gagal masuk.';
+            return;
+          }
+          status.textContent = 'Login berhasil. Mengarahkan ke app...';
+          window.location.href = '/app';
+        });
+        </script>
+        """,
     )
 
 
@@ -935,13 +1076,106 @@ async def billing_plans():
     return {"plans": get_plan_catalog()}
 
 
+@app.post("/api/auth/signup")
+async def auth_signup(payload: dict = Body(...)):
+    email = normalize_text(payload.get("email"))
+    password = payload.get("password", "")
+    full_name = normalize_text(payload.get("full_name"))
+    company_name = normalize_text(payload.get("company_name"))
+    onboarding_use_case = normalize_text(payload.get("onboarding_use_case"))
+
+    status_code, data = await supabase_auth_request(
+        "/signup",
+        {
+            "email": email,
+            "password": password,
+            "data": {
+                "full_name": full_name,
+                "company_name": company_name,
+                "onboarding_use_case": onboarding_use_case,
+            },
+        },
+    )
+    response = JSONResponse(data, status_code=status_code)
+    session = data.get("session") or {}
+    access_token = session.get("access_token")
+    refresh_token = session.get("refresh_token")
+    if access_token:
+        response.set_cookie(AUTH_COOKIE_NAME, access_token, httponly=True, samesite="lax", secure=COOKIE_SECURE, max_age=60 * 60 * 24 * 7)
+    if refresh_token:
+        response.set_cookie(REFRESH_COOKIE_NAME, refresh_token, httponly=True, samesite="lax", secure=COOKIE_SECURE, max_age=60 * 60 * 24 * 30)
+    return response
+
+
+@app.post("/api/auth/signin")
+async def auth_signin(payload: dict = Body(...)):
+    email = normalize_text(payload.get("email"))
+    password = payload.get("password", "")
+
+    status_code, data = await supabase_auth_request(
+        "/token?grant_type=password",
+        {
+            "email": email,
+            "password": password,
+        },
+    )
+    response = JSONResponse(data, status_code=status_code)
+    access_token = data.get("access_token")
+    refresh_token = data.get("refresh_token")
+    if access_token:
+        response.set_cookie(AUTH_COOKIE_NAME, access_token, httponly=True, samesite="lax", secure=COOKIE_SECURE, max_age=60 * 60 * 24 * 7)
+    if refresh_token:
+        response.set_cookie(REFRESH_COOKIE_NAME, refresh_token, httponly=True, samesite="lax", secure=COOKIE_SECURE, max_age=60 * 60 * 24 * 30)
+    return response
+
+
+@app.post("/api/auth/signout")
+async def auth_signout():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(AUTH_COOKIE_NAME)
+    response.delete_cookie(REFRESH_COOKIE_NAME)
+    return response
+
+
+@app.get("/api/auth/session")
+async def auth_session(request: Request):
+    if not supabase_auth_configured():
+        return {"configured": False, "authenticated": False}
+    user = await get_authenticated_user(request)
+    return {
+        "configured": True,
+        "authenticated": bool(user),
+        "user": user,
+    }
+
+
+@app.get("/api/system/config")
+async def system_config():
+    plans = get_plan_catalog()
+    return {
+        "supabase_configured": supabase_auth_configured(),
+        "mayar_ready": all(bool(plan["checkout_url"]) for plan in plans),
+        "plans": [
+            {
+                "code": plan["code"],
+                "has_checkout_url": bool(plan["checkout_url"]),
+            }
+            for plan in plans
+        ],
+    }
+
+
 @app.post("/api/payment/webhook/mayar")
 async def mayar_webhook(payload: dict):
     # Temporary ingestion point until Supabase/Postgres wiring is connected.
     return {"received": True, "provider": "mayar", "keys": sorted(payload.keys())}
 
 @app.get("/app", response_class=HTMLResponse)
-async def app_page():
+async def app_page(request: Request):
+    if supabase_auth_configured():
+        user = await get_authenticated_user(request)
+        if not user:
+            return RedirectResponse("/signin", status_code=302)
     return APP_HTML
 
 

@@ -30,6 +30,11 @@ Sinyal uses Mayar first for MVP billing so launch is not blocked by a slower dir
 6. Backend verifies payload and writes transaction + subscription status to Postgres.
 7. App unlocks access based on the active subscription.
 
+## Notes
+
+- Current app routes already redirect `/checkout/<plan>` to the matching Mayar URL when the env is filled.
+- If the URL is still empty, the route intentionally returns a clear setup message instead of failing silently.
+
 ## What Still Needs Implementation
 
 - Verify Mayar webhook signature or secret

@@ -2,3 +2,4 @@ scrapling[all]
 fastapi
 uvicorn
 httpx
+python-dotenv
