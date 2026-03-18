@@ -1185,8 +1185,30 @@ body::before {{
   font-size: 13px;
   line-height: 1.7;
 }}
+.after-pay {{
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}}
+.after-pay-card {{
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid var(--line);
+}}
+.after-pay-card strong {{
+  display: block;
+  margin-bottom: 6px;
+  font-size: 16px;
+}}
+.after-pay-card span {{
+  color: var(--soft);
+  font-size: 13px;
+  line-height: 1.65;
+}}
 @media (max-width: 980px) {{
-  .hero, .pricing, .mini-grid {{ grid-template-columns: 1fr; }}
+  .hero, .pricing, .mini-grid, .after-pay {{ grid-template-columns: 1fr; }}
   .topbar {{ flex-direction: column; align-items: flex-start; }}
 }}
 </style>
@@ -1239,6 +1261,21 @@ body::before {{
       {plans_html}
     </div>
 
+    <div class="after-pay">
+      <div class="after-pay-card">
+        <strong>Akun langsung dicek</strong>
+        <span>Begitu user selesai bayar, backend baca invoice dan update langganan di database.</span>
+      </div>
+      <div class="after-pay-card">
+        <strong>Akses otomatis kebuka</strong>
+        <span>Search, profile, dan comments tidak dibuka manual. Semua dibaca dari status paket aktif.</span>
+      </div>
+      <div class="after-pay-card">
+        <strong>Kuota tercatat rapi</strong>
+        <span>Pemakaian per fitur langsung masuk ke usage log, jadi nanti gampang dipantau dan dibatasi per plan.</span>
+      </div>
+    </div>
+
     <div class="footnote">
       Payment awal saya arahkan ke Mayar karena paling cepat untuk launch. Begitu volume naik dan kita butuh kontrol billing yang lebih dalam, flow ini masih bisa dipindah ke gateway direct tanpa buang fondasi auth dan Postgres.
     </div>
@@ -1248,9 +1285,212 @@ body::before {{
 </html>"""
 
 
+def render_start_page():
+    return """<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lanjutkan Setup Sinyal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7efe4;
+  --ink: #1f1711;
+  --soft: #725a4b;
+  --muted: #9b8576;
+  --line: rgba(80, 52, 31, 0.12);
+  --card: rgba(255,255,255,0.88);
+  --accent: #ef5a29;
+  --accent-2: #ff8d42;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--ink);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(239,90,41,0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(41,93,87,0.14), transparent 24%),
+    linear-gradient(180deg, #fffaf4 0%, #f7efe4 56%, #f0e2d2 100%);
+}
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.shell {
+  width: min(760px, 100%);
+  display: grid;
+  gap: 18px;
+}
+.brand {
+  font-family: 'DM Serif Display', serif;
+  font-size: 34px;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+  color: var(--ink);
+}
+.brand span { color: var(--accent); }
+.panel {
+  border-radius: 32px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 28px 70px rgba(96, 67, 45, 0.12);
+  backdrop-filter: blur(14px);
+  padding: 28px;
+}
+.eyebrow {
+  display: inline-flex;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid var(--line);
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+h1 {
+  margin-top: 16px;
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(42px, 7vw, 72px);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+p.lead {
+  margin-top: 14px;
+  color: var(--soft);
+  font-size: 17px;
+  line-height: 1.8;
+}
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+.step {
+  padding: 16px;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid var(--line);
+}
+.step strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+.step span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.status-card {
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid var(--line);
+}
+.status-card strong {
+  display: block;
+  font-size: 21px;
+  margin-bottom: 8px;
+}
+.status-card p {
+  color: var(--soft);
+  font-size: 14px;
+  line-height: 1.75;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 18px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 800;
+}
+.button.primary {
+  color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 18px 36px rgba(239,90,41,0.2);
+}
+.button.soft {
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+  border: 1px solid var(--line);
+}
+@media (max-width: 760px) {
+  .steps { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="shell">
+    <a class="brand" href="/">Sin<span>yal</span></a>
+    <div class="panel">
+      <div class="eyebrow">Lanjutkan setup akun</div>
+      <h1>Tinggal satu langkah lagi buat mulai kerja.</h1>
+      <p class="lead">Halaman ini otomatis ngecek akun, paket, dan langkah berikutnya. Jadi habis daftar atau login, user nggak dilempar ke tempat yang bikin bingung.</p>
+      <div class="steps">
+        <div class="step"><strong>1. Bikin akun</strong><span>Data user masuk ke auth dan profil dasar langsung tersimpan.</span></div>
+        <div class="step"><strong>2. Pilih paket</strong><span>Kalau paket belum aktif, sistem arahkan ke pembayaran tanpa muter-muter.</span></div>
+        <div class="step"><strong>3. Mulai riset</strong><span>Begitu aktif, app langsung baca akses dan kuota dari backend.</span></div>
+      </div>
+    </div>
+    <div class="panel status-card">
+      <strong id="nextStepTitle">Sedang cek akun...</strong>
+      <p id="nextStepBody">Tunggu sebentar, saya lagi baca session dan status paket dari backend.</p>
+      <div class="actions">
+        <a class="button primary" id="nextStepButton" href="/app">Lanjut</a>
+        <a class="button soft" href="/">Kembali ke landing</a>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+async function loadNextStep() {
+  const title = document.getElementById('nextStepTitle');
+  const body = document.getElementById('nextStepBody');
+  const button = document.getElementById('nextStepButton');
+  try {
+    const resp = await fetch('/api/account/next-step');
+    const data = await resp.json();
+    title.textContent = data.title || 'Lanjutkan';
+    body.textContent = data.message || 'Lanjut ke langkah berikutnya.';
+    button.textContent = data.cta_label || 'Lanjut';
+    button.href = data.target || '/app';
+  } catch (e) {
+    title.textContent = 'Arah berikutnya belum kebaca';
+    body.textContent = 'Session atau backend belum siap. Kamu tetap bisa lanjut manual ke app atau payment.';
+    button.textContent = 'Buka app';
+    button.href = '/app';
+  }
+}
+loadNextStep();
+</script>
+</body>
+</html>"""
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return LANDING_HTML
+
+
+@app.get("/start", response_class=HTMLResponse)
+async def start_page():
+    return render_start_page()
 
 
 @app.get("/signup", response_class=HTMLResponse)
@@ -1301,8 +1541,8 @@ async def signup_page():
             status.textContent = data.msg || data.error_description || data.error || 'Gagal daftar.';
             return;
           }
-          status.textContent = 'Akun berhasil dibuat. Mengarahkan ke app...';
-          window.location.href = '/app';
+          status.textContent = 'Akun berhasil dibuat. Lagi cek langkah berikutnya...';
+          window.location.href = '/start';
         });
         </script>
         """,
@@ -1352,8 +1592,8 @@ async def signin_page():
             status.textContent = data.msg || data.error_description || data.error || 'Gagal masuk.';
             return;
           }
-          status.textContent = 'Login berhasil. Mengarahkan ke app...';
-          window.location.href = '/app';
+          status.textContent = 'Login berhasil. Lagi cek langkah berikutnya...';
+          window.location.href = '/start';
         });
         </script>
         """,
@@ -1529,6 +1769,56 @@ async def account_usage(request: Request):
         "plan": plan,
         "period_start": period_start.isoformat(),
         "usage": counters,
+    }
+
+
+@app.get("/api/account/next-step")
+async def account_next_step(request: Request):
+    if not supabase_auth_configured():
+        return {
+            "configured": False,
+            "target": "/app",
+            "title": "Mode development aktif",
+            "message": "Auth belum aktif di environment ini, jadi app bisa langsung dibuka untuk development.",
+            "cta_label": "Buka app",
+        }
+
+    user = await get_authenticated_user(request)
+    if not user:
+        return {
+            "configured": True,
+            "authenticated": False,
+            "target": "/signin",
+            "title": "Masuk dulu",
+            "message": "Akun belum aktif di browser ini. Masuk dulu supaya sistem bisa cek paket dan kuota kamu.",
+            "cta_label": "Masuk",
+        }
+
+    subscription = plan = None
+    if supabase_rest_configured():
+        subscription, plan = await fetch_current_subscription(user["id"])
+
+    if subscription_is_active(subscription):
+        return {
+            "configured": True,
+            "authenticated": True,
+            "target": "/app",
+            "title": "Akun siap dipakai",
+            "message": f"Paket {plan.get('name') if plan else subscription.get('plan_code')} aktif. Kamu bisa lanjut langsung ke app.",
+            "cta_label": "Masuk ke app",
+            "plan": plan,
+            "subscription": subscription,
+        }
+
+    return {
+        "configured": True,
+        "authenticated": True,
+        "target": "/payment",
+        "title": "Pilih paket dulu",
+        "message": "Akun sudah jadi, tapi paket aktif belum ada. Langkah berikutnya tinggal pilih paket supaya akses fitur terbuka.",
+        "cta_label": "Lihat paket",
+        "plan": plan,
+        "subscription": subscription,
     }
 
 
