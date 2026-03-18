@@ -2352,6 +2352,13 @@ nav {
   gap: 14px;
   flex-wrap: wrap;
 }
+.nav-links .link-group,
+.nav-links .cta-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 .nav-links a {
   text-decoration: none;
   color: var(--soft);
@@ -2434,6 +2441,7 @@ nav {
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 28px;
+  align-items: center;
 }
 .hero-strip {
   margin-top: 18px;
@@ -2489,6 +2497,11 @@ nav {
 .showcase {
   padding: 0 20px 20px;
 }
+.preview-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 168px;
+  gap: 12px;
+}
 .search-shell {
   border-radius: 28px;
   background: rgba(255,255,255,0.86);
@@ -2528,6 +2541,70 @@ nav {
 .results-column, .metric-column {
   display: grid;
   gap: 12px;
+}
+.right-rail {
+  display: grid;
+  gap: 12px;
+}
+.rail-panel {
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  padding: 14px;
+}
+.rail-panel h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.rail-score {
+  display: grid;
+  gap: 10px;
+}
+.score-item {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(239, 90, 41, 0.08);
+  border: 1px solid rgba(239, 90, 41, 0.12);
+}
+.score-item strong {
+  display: block;
+  font-size: 17px;
+  margin-bottom: 2px;
+}
+.score-item span {
+  color: var(--soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.mini-feed {
+  display: grid;
+  gap: 10px;
+}
+.mini-video {
+  min-height: 100px;
+  border-radius: 18px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.06), rgba(0,0,0,0.18)),
+    linear-gradient(135deg, rgba(239, 90, 41, 0.36), rgba(255, 179, 71, 0.18), rgba(255,255,255,0.96));
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.mini-video strong {
+  color: white;
+  font-size: 13px;
+  line-height: 1.45;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.25);
+}
+.mini-video span {
+  color: rgba(255,255,255,0.88);
+  font-size: 11px;
+  font-weight: 700;
 }
 .result-card, .metric-card {
   border-radius: 22px;
@@ -2587,6 +2664,28 @@ section { padding: 30px 0; }
   max-width: 520px;
   color: var(--soft);
   line-height: 1.75;
+}
+.quick-proof {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.proof-card {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(84, 52, 29, 0.08);
+}
+.proof-card strong {
+  display: block;
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+.proof-card span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 .value-grid {
   display: grid;
@@ -2817,15 +2916,16 @@ footer {
   font-size: 14px;
 }
 @media (max-width: 980px) {
-  .hero-shell, .value-grid, .pricing-grid, .scenario-panel, .data-grid { grid-template-columns: 1fr; }
+  .hero-shell, .value-grid, .pricing-grid, .scenario-panel, .data-grid, .preview-stack, .quick-proof { grid-template-columns: 1fr; }
   .section-head, .cta-panel, .nav-inner { flex-direction: column; align-items: flex-start; }
   .stats-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .hero h1 { font-size: 54px; }
   .feed-grid { grid-template-columns: 1fr; }
-  .toggle-group, .nav-links { width: 100%; }
+  .toggle-group, .nav-links, .nav-links .link-group, .nav-links .cta-group { width: 100%; }
   .toggle, .mode-tab { flex: 1; text-align: center; }
+  .button { width: 100%; }
 }
 </style>
 </head>
@@ -2835,13 +2935,16 @@ footer {
     <div class="container nav-inner">
       <div class="brand">Sin<span>yal</span></div>
       <div class="nav-links">
-        <a href="#nilai">Nilai</a>
-        <a href="#pakai">Cara Pakai</a>
-        <a href="#harga">Harga</a>
-        <a href="/signin">Masuk</a>
-        <a href="/signup">Daftar</a>
-        <a class="button secondary" href="/payment">Bayar</a>
-        <a class="button primary" href="/app">Coba Sekarang</a>
+        <div class="link-group">
+          <a href="#nilai">Kenapa enak dipakai</a>
+          <a href="#pakai">Contoh pakai</a>
+          <a href="#harga">Harga</a>
+          <a href="/signin">Masuk</a>
+        </div>
+        <div class="cta-group">
+          <a class="button secondary" href="/payment">Lihat paket</a>
+          <a class="button primary" href="/signup">Coba gratis dulu</a>
+        </div>
       </div>
     </div>
   </nav>
@@ -2850,16 +2953,16 @@ footer {
     <div class="container hero-shell">
       <div class="hero-copy">
         <div class="eyebrow">Dibuat khusus buat cari sinyal sosial media di Indonesia</div>
-        <h1>Cari topik, creator, dan <em>isi obrolan pasar</em> dalam satu layar.</h1>
-        <p>Sinyal bukan dashboard yang bikin pusing. Tinggal ketik topik, pilih platform, lalu baca hasil yang sudah dirapikan: views, komentar, profil creator, sampai transkrip video.</p>
+        <h1>Kalau lagi cari topik yang <em>lagi rame</em>, jangan buka lima tab sekaligus.</h1>
+        <p>Sinyal bantu kamu cari konten, cek creator, baca komentar, dan nangkep isi video dalam satu tempat. Jadi kerja risetnya terasa ringan, bukan ribet.</p>
         <div class="hero-actions">
-          <a class="button primary" href="/signup">Mulai Daftar</a>
+          <a class="button primary" href="/signup">Coba gratis dulu</a>
           <a class="button secondary" href="/payment">Lihat Paket</a>
         </div>
         <div class="hero-strip">
-          <div class="mini-pill">Pakai bahasa Indonesia</div>
-          <div class="mini-pill">Tidak perlu paham teknis</div>
-          <div class="mini-pill">Cocok untuk agency, brand, UMKM</div>
+          <div class="mini-pill">Bahasanya sederhana</div>
+          <div class="mini-pill">Cocok buat tim kecil sampai agency</div>
+          <div class="mini-pill">Bisa langsung dipakai tanpa setup aneh-aneh</div>
         </div>
       </div>
 
@@ -2881,25 +2984,43 @@ footer {
               <div class="chip">30 hari terakhir</div>
               <div class="chip">Min. 100 ribu views</div>
             </div>
-            <div class="data-grid">
-              <div class="results-column" id="demo-results">
-                <div class="result-card">
-                  <strong>Hook “3 hari bikin wajah lebih kalem” naik cepat</strong>
-                  <span>Video pendek edukasi + before after ringan paling sering muncul di hasil atas.</span>
+            <div class="preview-stack">
+              <div class="data-grid">
+                <div class="results-column" id="demo-results">
+                  <div class="result-card">
+                    <strong>Hook “3 hari bikin wajah lebih kalem” naik cepat</strong>
+                    <span>Video pendek edukasi + before after ringan paling sering muncul di hasil atas.</span>
+                  </div>
+                  <div class="result-card">
+                    <strong>Format review jujur lebih disukai</strong>
+                    <span>Komentar banyak membandingkan hasil asli, bukan video yang terlalu promosi.</span>
+                  </div>
                 </div>
-                <div class="result-card">
-                  <strong>Format review jujur lebih disukai</strong>
-                  <span>Komentar banyak membandingkan hasil asli, bukan video yang terlalu promosi.</span>
+                <div class="metric-column" id="demo-metrics">
+                  <div class="metric-card highlight">
+                    <strong>Trend score: 8.9/10</strong>
+                    <span>Topik ini sedang ramai dan masih punya ruang untuk ikut masuk.</span>
+                  </div>
+                  <div class="metric-card">
+                    <strong>Creator aktif: 27 akun</strong>
+                    <span>Bisa langsung buka profil untuk cek performa dan pola postingan.</span>
+                  </div>
                 </div>
               </div>
-              <div class="metric-column" id="demo-metrics">
-                <div class="metric-card highlight">
-                  <strong>Trend score: 8.9/10</strong>
-                  <span>Topik ini sedang ramai dan masih punya ruang untuk ikut masuk.</span>
+              <div class="right-rail">
+                <div class="rail-panel">
+                  <h4>Panel cepat</h4>
+                  <div class="rail-score" id="demo-rail-scores">
+                    <div class="score-item"><strong>Hook kuat</strong><span>Kalimat pembuka yang bikin orang berhenti scroll.</span></div>
+                    <div class="score-item"><strong>Komentar hidup</strong><span>Banyak pertanyaan dan respon nyata dari audiens.</span></div>
+                  </div>
                 </div>
-                <div class="metric-card">
-                  <strong>Creator aktif: 27 akun</strong>
-                  <span>Bisa langsung buka profil untuk cek performa dan pola postingan.</span>
+                <div class="rail-panel">
+                  <h4>Contoh feed</h4>
+                  <div class="mini-feed" id="demo-mini-feed">
+                    <div class="mini-video"><strong>“Kulit merah jadi lebih tenang?”</strong><span>2,4 jt views</span></div>
+                    <div class="mini-video"><strong>“Skincare murah yang ternyata works”</strong><span>980 rb views</span></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2917,26 +3038,31 @@ footer {
   <section id="nilai">
     <div class="container">
       <div class="section-head">
-        <h2>Lebih sedikit klik. Lebih cepat paham.</h2>
-        <p>Yang dijual bukan data mentah. Yang dijual adalah rasa cepat ngerti apa yang sedang terjadi.</p>
+        <h2>Nggak banyak klik. Nggak banyak nebak.</h2>
+        <p>Orang pakai tool kayak gini bukan karena suka angka. Orang pakai karena pengen cepat ngerti apa yang lagi jalan di pasar.</p>
+      </div>
+      <div class="quick-proof">
+        <div class="proof-card"><strong>1 kotak cari</strong><span>Ketik seperti biasa, hasilnya langsung dirapikan.</span></div>
+        <div class="proof-card"><strong>5 platform</strong><span>Nggak perlu pindah-pindah tab dari TikTok ke Instagram lalu balik lagi.</span></div>
+        <div class="proof-card"><strong>Hook sampai komentar</strong><span>Bukan cuma link video, tapi konteksnya juga kebaca.</span></div>
       </div>
       <div class="value-grid">
         <div class="value-card big glass">
-          <h3>Satu tempat buat kerja yang biasanya pecah ke banyak tab</h3>
-          <p>Cari topik, cek profil, baca komentar, lihat sinyal promosi, dan tangkap isi video. Semua langsung dari satu alur yang gampang diikuti.</p>
+          <h3>Satu tempat buat kerja yang biasanya bikin browser penuh tab</h3>
+          <p>Cari topik, cek profil, baca komentar, lihat sinyal promosi, dan nangkep isi video. Semuanya dibikin lebih enak dibaca, bukan mentah.</p>
           <div class="stack-list">
             <div class="stack-item">Cari kata kunci lintas TikTok, Instagram, YouTube, X, dan Facebook.</div>
             <div class="stack-item">Filter hasil pakai views, likes, tanggal, dan urutan yang masuk akal.</div>
-            <div class="stack-item">Buka profil creator untuk lihat rata-rata performa konten.</div>
+            <div class="stack-item">Buka profil creator buat lihat rata-rata performa konten dengan cepat.</div>
           </div>
         </div>
         <div class="value-card glass">
-          <h3>Baca pasar dari komentar nyata</h3>
-          <p>Cari pain point, candaan, pujian, keberatan, dan bahasa asli audiens tanpa tebak-tebakan.</p>
+          <h3>Lihat isi pasar dari komentar beneran</h3>
+          <p>Cari keluhan, candaan, pujian, keberatan, dan kata-kata yang memang dipakai audiens sehari-hari.</p>
         </div>
         <div class="value-card glass">
-          <h3>Pahami video tanpa nonton semua</h3>
-          <p>Transkrip bantu screening cepat. Bagus buat riset konten, pitch, dan shortlist creator.</p>
+          <h3>Pahami video tanpa harus nonton semuanya</h3>
+          <p>Transkrip bantu screening cepat. Cocok buat riset konten, cari angle, dan shortlist creator.</p>
         </div>
       </div>
     </div>
@@ -2945,8 +3071,8 @@ footer {
   <section id="pakai">
     <div class="container">
       <div class="section-head">
-        <h2>Pakai sesuai gaya kerja kamu</h2>
-        <p>Landing page-nya saya bikin lebih interaktif supaya orang langsung kebayang Sinyal dipakai buat apa, bukan cuma baca daftar fitur.</p>
+        <h2>Pakai sesuai cara kerja kamu</h2>
+        <p>Biar nggak terasa kayak halaman brosur, saya bikin bagian ini lebih kebayang dipakai sehari-hari: buat owner, agency, atau tim yang lagi cari creator.</p>
       </div>
       <div class="mode-tabs">
         <button class="mode-tab active" type="button" data-mode="umkm">UMKM</button>
@@ -2956,8 +3082,8 @@ footer {
 
       <div class="scenario-panel glass active" data-panel="umkm">
         <div class="scenario-copy">
-          <h3>Cari ide konten dan tahu gaya bahasa pasar sebelum posting.</h3>
-          <p>Buat owner atau admin, fokusnya sederhana: topik apa yang lagi hidup, angle apa yang dipakai kompetitor, dan komentar seperti apa yang paling sering muncul.</p>
+          <h3>Cari ide konten dan tahu orang ngomong apa sebelum posting.</h3>
+          <p>Buat owner atau admin, yang penting itu simpel: topik apa yang lagi hidup, angle apa yang dipakai kompetitor, dan komentar seperti apa yang paling sering muncul.</p>
           <div class="scenario-points">
             <div class="scenario-point">Cari topik seperti “kopi kekinian”, “serum jerawat”, atau “jualan frozen food”.</div>
             <div class="scenario-point">Lihat konten paling ramai dalam 7 atau 30 hari terakhir.</div>
@@ -2981,7 +3107,7 @@ footer {
       <div class="scenario-panel glass" data-panel="agency">
         <div class="scenario-copy">
           <h3>Riset lebih cepat buat pitch, report, dan shortlist creator.</h3>
-          <p>Buat tim agency, Sinyal dipakai buat memangkas waktu buka tab satu per satu. Fokusnya: siapa yang layak dipantau, topik mana yang sedang naik, dan konten mana yang perform.</p>
+          <p>Buat tim agency, Sinyal kepakainya pas banget buat motong waktu buka tab satu-satu. Fokusnya: siapa yang layak dipantau, topik mana yang lagi naik, dan konten mana yang perform.</p>
           <div class="scenario-points">
             <div class="scenario-point">Bandingkan akun creator dari performa rata-rata, engagement, dan pola postingan.</div>
             <div class="scenario-point">Tarik komentar buat cari pain point dan angle campaign.</div>
@@ -3004,8 +3130,8 @@ footer {
 
       <div class="scenario-panel glass" data-panel="creator">
         <div class="scenario-copy">
-          <h3>Cari creator yang pas, bukan cuma yang angkanya besar.</h3>
-          <p>Kalau tugasnya sourcing creator, yang penting bukan cuma followers. Kamu perlu lihat komentar, gaya bahasa, rata-rata views, dan apakah kontennya terlalu promosi atau masih natural.</p>
+          <h3>Cari creator yang pas, bukan cuma yang followers-nya besar.</h3>
+          <p>Kalau tugasnya sourcing creator, yang penting bukan cuma followers. Kamu perlu lihat komentar, gaya bahasa, rata-rata views, dan apakah kontennya masih natural atau kebanyakan promosi.</p>
           <div class="scenario-points">
             <div class="scenario-point">Buka profil creator dan lihat rata-rata performa postingan.</div>
             <div class="scenario-point">Baca komentar untuk cek kualitas interaksi audiens.</div>
@@ -3031,8 +3157,8 @@ footer {
   <section id="harga">
     <div class="container pricing-wrap glass">
       <div class="section-head">
-        <h2>Mulai dari harga yang masih masuk akal</h2>
-        <p>Harga dibuat ramah buat market Indonesia, tapi tetap pakai batas pemakaian biar server dan scraping-nya sehat.</p>
+        <h2>Harganya dibuat biar masih masuk akal</h2>
+        <p>Kita mulai dari harga yang masih bisa dicoba dulu, tapi tetap pakai batas pemakaian supaya service-nya tetap sehat saat user mulai banyak.</p>
       </div>
       <div class="pricing-grid">
         <div class="price-card">
@@ -3082,10 +3208,10 @@ footer {
   <section>
     <div class="container cta-panel glass">
       <div>
-        <h2>Masuk, cari topik, lalu rasakan sendiri.</h2>
-        <p>Kalau landing page sebelumnya terasa terlalu banyak bacaannya, versi ini saya bikin lebih visual dan lebih cepat menjelaskan nilainya. Dari sini tinggal masuk ke aplikasi dan coba workflow aslinya.</p>
+        <h2>Masuk, ketik topik, lalu lihat sendiri enaknya.</h2>
+        <p>Tujuan landing page ini sekarang jelas: bikin orang cepat paham produknya, bukan capek baca. Dari sini tinggal daftar, pilih paket kalau perlu, lalu coba workflow aslinya.</p>
       </div>
-      <a class="button primary" href="/signup">Mulai Sekarang</a>
+      <a class="button primary" href="/signup">Coba sekarang</a>
     </div>
   </section>
 
@@ -3099,41 +3225,65 @@ footer {
 <script>
 const heroDemos = {
   tren: {
-    query: "Cari: skincare viral buat remaja",
+    query: "Cari topik: skincare viral buat remaja",
     filters: ["TikTok", "Instagram", "30 hari terakhir", "Min. 100 ribu views"],
     results: [
-      ["Hook “3 hari bikin wajah lebih kalem” naik cepat", "Video pendek edukasi + before after ringan paling sering muncul di hasil atas."],
-      ["Format review jujur lebih disukai", "Komentar banyak membandingkan hasil asli, bukan video yang terlalu promosi."]
+      ["Hook “3 hari bikin wajah lebih kalem” lagi naik", "Video edukasi pendek + before after ringan paling sering nongol di hasil atas."],
+      ["Review jujur lebih gampang nyangkut", "Komentar banyak ngebandingin hasil asli, bukan video yang terlalu jualan."]
     ],
     metrics: [
-      ["Trend score: 8.9/10", "Topik ini sedang ramai dan masih punya ruang untuk ikut masuk."],
-      ["Creator aktif: 27 akun", "Bisa langsung buka profil untuk cek performa dan pola postingan."]
+      ["Trend score: 8.9/10", "Topik ini lagi rame dan masih kebuka buat ikut masuk."],
+      ["Creator aktif: 27 akun", "Bisa langsung dibuka satu-satu buat cek performa feed-nya."]
+    ],
+    rail: [
+      ["Hook kuat", "Kalimat pembuka yang bikin orang berhenti scroll."],
+      ["Komentar hidup", "Banyak pertanyaan dan respon nyata dari audiens."]
+    ],
+    feed: [
+      ["“Kulit merah jadi lebih tenang?”", "2,4 jt views"],
+      ["“Skincare murah yang ternyata works”", "980 rb views"]
     ],
     stats: [["124", "hasil kepilih"], ["2.4 jt", "rata-rata views"], ["18 mnt", "waktu yang dihemat"]]
   },
   creator: {
-    query: "Cari: creator finansial Indonesia",
+    query: "Cari creator: finansial Indonesia",
     filters: ["TikTok", "YouTube", "7 hari terakhir", "Sort: paling banyak views"],
     results: [
-      ["Akun dengan komentar aktif naik ke atas", "Bukan cuma views, tapi kualitas interaksi juga lebih kelihatan."],
-      ["Konten sponsor bisa dipisah", "Lebih gampang nilai performa organik sebelum shortlist creator."]
+      ["Akun dengan komentar aktif langsung naik", "Bukan cuma views, tapi kualitas interaksinya juga kelihatan."],
+      ["Konten sponsor bisa dipisah", "Jadi lebih gampang nilai performa organik sebelum shortlist creator."]
     ],
     metrics: [
-      ["Engagement rata-rata: 7.4%", "Akun yang stabil lebih mudah dipilih untuk campaign yang butuh trust."],
-      ["Shortlist cepat: 8 akun", "Profil bisa dibuka satu per satu tanpa pindah-pindah platform."]
+      ["Engagement rata-rata: 7.4%", "Akun yang stabil lebih enak dipilih buat campaign yang butuh trust."],
+      ["Shortlist cepat: 8 akun", "Profil bisa dicek tanpa pindah-pindah platform."]
+    ],
+    rail: [
+      ["Organik vs sponsor", "Feed yang terlalu banyak promo gampang keliatan."],
+      ["Komentar relevan", "Bisa cek apakah audiensnya beneran nyambung."]
+    ],
+    feed: [
+      ["“Cara atur duit gajian biar nggak bocor”", "640 rb views"],
+      ["“Investasi pemula jangan mulai dari sini”", "410 rb views"]
     ],
     stats: [["8", "akun shortlist"], ["7.4%", "engagement rata-rata"], ["3x", "lebih cepat screening"]]
   },
   komentar: {
-    query: "Cari: komentar video kopi susu literan",
+    query: "Cari komentar: kopi susu literan",
     filters: ["TikTok", "Komentar", "30 hari terakhir", "Transkrip aktif"],
     results: [
       ["Komentar dominan: kemanisan dan harga", "Audiens paling sering bahas rasa terlalu manis dan porsi yang cocok buat sharing."],
-      ["Caption dan komentar saling nyambung", "Bagus buat cari angle promosi yang terasa natural."]
+      ["Caption dan komentar saling nyambung", "Enak buat cari angle promosi yang terasa natural, bukan maksa."]
     ],
     metrics: [
-      ["Komentar ketarik: 52", "Bisa dipakai untuk baca bahasa asli pasar dan pertanyaan yang berulang."],
+      ["Komentar kebaca: 52", "Bisa dipakai buat baca bahasa pasar yang asli dan pertanyaan yang berulang."],
       ["Transkrip siap baca", "Isi video cepat dipahami tanpa harus nonton semuanya."]
+    ],
+    rail: [
+      ["Pain point ketemu", "Harga dan rasa jadi dua hal yang paling sering disebut."],
+      ["Bahasa pasar kebaca", "Bisa langsung dipakai buat caption dan angle konten berikutnya."]
+    ],
+    feed: [
+      ["“Kenapa gelasnya kecil tapi manis banget”", "Komentar paling sering muncul"],
+      ["“Enak buat sharing, tapi harganya naik ya?”", "Komentar bernada beli ulang"]
     ],
     stats: [["52", "komentar terbaca"], ["11", "pain point muncul"], ["1 layar", "semua insight"]]
   }
@@ -3159,6 +3309,8 @@ const demoFilters = document.getElementById("demo-filters");
 const demoResults = document.getElementById("demo-results");
 const demoMetrics = document.getElementById("demo-metrics");
 const demoStats = document.getElementById("demo-stats");
+const demoRailScores = document.getElementById("demo-rail-scores");
+const demoMiniFeed = document.getElementById("demo-mini-feed");
 
 function renderDemo(name) {
   const demo = heroDemos[name];
@@ -3167,6 +3319,8 @@ function renderDemo(name) {
   demoFilters.innerHTML = demo.filters.map((item) => `<div class="chip">${item}</div>`).join("");
   demoResults.innerHTML = demo.results.map(([title, desc]) => `<div class="result-card"><strong>${title}</strong><span>${desc}</span></div>`).join("");
   demoMetrics.innerHTML = demo.metrics.map(([title, desc], index) => `<div class="metric-card${index === 0 ? " highlight" : ""}"><strong>${title}</strong><span>${desc}</span></div>`).join("");
+  demoRailScores.innerHTML = demo.rail.map(([title, desc]) => `<div class="score-item"><strong>${title}</strong><span>${desc}</span></div>`).join("");
+  demoMiniFeed.innerHTML = demo.feed.map(([title, meta]) => `<div class="mini-video"><strong>${title}</strong><span>${meta}</span></div>`).join("");
   demoStats.innerHTML = demo.stats.map(([value, label]) => `<div class="stat-box"><strong>${value}</strong><span>${label}</span></div>`).join("");
 }
 
