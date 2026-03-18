@@ -13,7 +13,7 @@ class YouTubeScraper(BaseScraper):
         encoded = quote(keyword)
         url = f"https://www.youtube.com/results?search_query={encoded}"
 
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
+        response = self.fetch_page(url, timeout=12000)
         if response.status != 200:
             print(f"[YouTube] Failed with status {response.status}")
             return []
@@ -112,6 +112,11 @@ class YouTubeScraper(BaseScraper):
         if not text:
             return None
         text = text.lower().replace(",", "").replace(" views", "").replace(" view", "").strip()
+        match = re.match(r"^(\d+(?:\.\d+)?)([kmb])?$", text)
+        if match:
+            value = float(match.group(1))
+            multiplier = {"k": 1_000, "m": 1_000_000, "b": 1_000_000_000}.get(match.group(2), 1)
+            return int(value * multiplier)
         try:
             return int(text)
         except ValueError:

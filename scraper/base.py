@@ -7,7 +7,7 @@ class BaseScraper(ABC):
     platform: str = ""
 
     def __init__(self):
-        self.fetcher = StealthyFetcher()
+        self.fetcher = StealthyFetcher
 
     @abstractmethod
     def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:

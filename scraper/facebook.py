@@ -1,5 +1,6 @@
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
@@ -7,13 +8,18 @@ from scraper.models import VideoResult
 
 class FacebookScraper(BaseScraper):
     platform = "facebook"
+    GENERIC_AUTHOR_SEGMENTS = {"reel", "videos", "watch"}
 
     def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
         print(f"[Facebook] Searching for: {keyword}")
         encoded = quote(keyword)
         url = f"https://en-gb.facebook.com/watch/explore/{encoded}/"
 
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
+        response = self.fetch_page(
+            url,
+            wait_selector='a[href*="/videos/"], a[href*="/reel/"]',
+            timeout=15000,
+        )
         if response.status != 200:
             print(f"[Facebook] Failed with status {response.status}")
             return []
@@ -62,18 +68,31 @@ class FacebookScraper(BaseScraper):
         print(f"[Facebook] Found {len(results)} videos")
 
         # Fetch details for each video
-        for i, result in enumerate(results):
-            try:
-                self._enrich_video(result)
-                if result.title or result.author:
-                    print(f"[Facebook] ({i+1}/{len(results)}) {result.author} - {result.views} views")
-            except Exception as e:
-                print(f"[Facebook] Error enriching {result.video_url}: {e}")
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(results)))) as pool:
+            futures = {
+                pool.submit(self._enrich_video, result): result.video_url
+                for result in results
+            }
+            completed = 0
+            for future in as_completed(futures):
+                video_url = futures[future]
+                try:
+                    future.result()
+                    completed += 1
+                    result = next((item for item in results if item.video_url == video_url), None)
+                    if result and (result.title or result.author):
+                        print(f"[Facebook] ({completed}/{len(results)}) {result.author} - {result.views} views")
+                except Exception as e:
+                    print(f"[Facebook] Error enriching {video_url}: {e}")
 
         return results
 
     def _enrich_video(self, result: VideoResult):
-        response = self.fetch_page(result.video_url, network_idle=True, timeout=20000)
+        response = self.fetch_page(
+            result.video_url,
+            wait_selector='meta[property="og:title"], meta[name="description"]',
+            timeout=12000,
+        )
         if response.status != 200:
             return
 
@@ -92,7 +111,9 @@ class FacebookScraper(BaseScraper):
         if not result.author:
             url_match = re.search(r"facebook\.com/([^/]+)/", result.video_url)
             if url_match:
-                result.author = url_match.group(1)
+                candidate = url_match.group(1)
+                if candidate not in self.GENERIC_AUTHOR_SEGMENTS:
+                    result.author = candidate
 
     @staticmethod
     def _parse_abbreviated(number_str: str, suffix: str) -> int | None:

@@ -60,7 +60,8 @@ class TwitterScraper(BaseScraper):
         if not match:
             return None
 
-        author = match.group(1)
+        username = match.group(1)
+        author = username
 
         # Use oembed API via httpx (not browser) since it returns JSON
         oembed_url = f"https://publish.twitter.com/oembed?url={url}"
@@ -83,5 +84,5 @@ class TwitterScraper(BaseScraper):
             title=description[:100] if description else "",
             description=description,
             author=author,
-            author_url=f"https://x.com/{author}",
+            author_url=f"https://x.com/{username}",
         )

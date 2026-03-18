@@ -1,5 +1,6 @@
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
@@ -20,14 +21,22 @@ class InstagramScraper(BaseScraper):
         print(f"[Instagram] Found {len(urls)} posts/reels, fetching details...")
 
         results = []
-        for i, post_url in enumerate(urls):
-            try:
-                result = self._scrape_post(post_url, keyword)
-                if result:
-                    results.append(result)
-                    print(f"[Instagram] ({i+1}/{len(urls)}) @{result.author} - {result.likes} likes")
-            except Exception as e:
-                print(f"[Instagram] Error scraping {post_url}: {e}")
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(urls)))) as pool:
+            futures = {
+                pool.submit(self._scrape_post, post_url, keyword): post_url
+                for post_url in urls
+            }
+            for future in as_completed(futures):
+                post_url = futures[future]
+                try:
+                    result = future.result()
+                    if result:
+                        results.append(result)
+                        print(f"[Instagram] ({len(results)}/{len(urls)}) @{result.author} - {result.likes} likes")
+                        if len(results) >= max_results:
+                            break
+                except Exception as e:
+                    print(f"[Instagram] Error scraping {post_url}: {e}")
 
         return results
 
@@ -35,7 +44,11 @@ class InstagramScraper(BaseScraper):
         tag = keyword.replace(" ", "").lower()
         url = f"https://www.instagram.com/explore/tags/{quote(tag)}/"
 
-        response = self.fetch_page(url, network_idle=True, timeout=30000)
+        response = self.fetch_page(
+            url,
+            wait_selector='a[href*="/reel/"], a[href*="/p/"]',
+            timeout=15000,
+        )
         if response.status != 200:
             return []
 
@@ -58,7 +71,7 @@ class InstagramScraper(BaseScraper):
         encoded = quote(f"site:instagram.com/reel {keyword}")
         url = f"https://www.google.com/search?q={encoded}&num=30"
 
-        response = self.fetch_page(url, network_idle=True, timeout=20000)
+        response = self.fetch_page(url, network_idle=True, timeout=12000)
         if response.status != 200:
             return []
 
@@ -87,7 +100,7 @@ class InstagramScraper(BaseScraper):
             return None
 
     def _scrape_post(self, url: str, keyword: str) -> VideoResult | None:
-        response = self.fetch_page(url, network_idle=True, timeout=20000)
+        response = self.fetch_page(url, wait_selector='meta[property="og:title"], meta[name="description"]', timeout=12000)
         if response.status != 200:
             return None
 

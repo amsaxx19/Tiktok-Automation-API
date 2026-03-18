@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import asyncio
 import os
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from functools import partial
 
 from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 
 from scraper.tiktok import TikTokScraper
 from scraper.youtube import YouTubeScraper
@@ -17,6 +19,15 @@ from scraper.models import save_results
 
 app = FastAPI(title="Social Media Scraper")
 executor = ThreadPoolExecutor(max_workers=5)
+SCRAPE_TIMEOUT_SECONDS = int(os.getenv("SCRAPE_TIMEOUT_SECONDS", "45"))
+PROFILE_CACHE_TTL_SECONDS = int(os.getenv("PROFILE_CACHE_TTL_SECONDS", "900"))
+SEARCH_CACHE_TTL_SECONDS = int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "900"))
+COMMENTS_CACHE_TTL_SECONDS = int(os.getenv("COMMENTS_CACHE_TTL_SECONDS", "900"))
+PROFILE_CACHE: dict[tuple[str, int, str], tuple[float, dict]] = {}
+SEARCH_CACHE: dict[tuple, tuple[float, dict]] = {}
+COMMENTS_CACHE: dict[tuple[str, int], tuple[float, dict]] = {}
+PLATFORM_SEARCH_CACHE: dict[tuple, tuple[float, list]] = {}
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 
 SCRAPERS = {
     "tiktok": TikTokScraper,
@@ -26,10 +37,912 @@ SCRAPERS = {
     "facebook": FacebookScraper,
 }
 
+PLAN_CATALOG = {
+    "ringan": {
+        "name": "Paket Ringan",
+        "price_idr": 59_000,
+        "tagline": "Buat mulai rutin tanpa berat di biaya.",
+        "limits": [
+            "30 pencarian per bulan",
+            "10 cek profil",
+            "10 tarik komentar",
+            "10 transkrip video",
+        ],
+        "cta": "Mulai Paket Ringan",
+        "env_key": "MAYAR_URL_RINGAN",
+        "accent": "sun",
+    },
+    "tumbuh": {
+        "name": "Paket Tumbuh",
+        "price_idr": 99_000,
+        "tagline": "Pilihan paling pas buat pemakaian rutin.",
+        "limits": [
+            "120 pencarian per bulan",
+            "40 cek profil",
+            "40 tarik komentar",
+            "40 transkrip video",
+        ],
+        "cta": "Ambil Paket Tumbuh",
+        "env_key": "MAYAR_URL_TUMBUH",
+        "accent": "ember",
+    },
+    "tim": {
+        "name": "Paket Tim",
+        "price_idr": 299_000,
+        "tagline": "Untuk workflow tim kecil yang udah serius.",
+        "limits": [
+            "500 pencarian per bulan",
+            "150 cek profil",
+            "150 tarik komentar",
+            "150 transkrip video",
+            "3 anggota tim",
+        ],
+        "cta": "Ambil Paket Tim",
+        "env_key": "MAYAR_URL_TIM",
+        "accent": "forest",
+    },
+}
+
+
+def normalize_text(value: str | None) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def split_sentences(value: str) -> list[str]:
+    return [part.strip() for part in SENTENCE_SPLIT_RE.split(normalize_text(value)) if part.strip()]
+
+
+def truncate_words(value: str, max_words: int) -> str:
+    words = normalize_text(value).split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words]).rstrip(",.;:") + "..."
+
+
+def derive_hook(result) -> str:
+    candidates = [
+        getattr(result, "hook", ""),
+        getattr(result, "title", ""),
+        getattr(result, "transcript", ""),
+        getattr(result, "caption", ""),
+        getattr(result, "description", ""),
+    ]
+    for candidate in candidates:
+        candidate = normalize_text(candidate)
+        if not candidate:
+            continue
+        sentences = split_sentences(candidate)
+        first = sentences[0] if sentences else candidate
+        return truncate_words(first, 16)
+    return ""
+
+
+def derive_content(result, hook: str) -> str:
+    transcript = normalize_text(getattr(result, "transcript", ""))
+    caption = normalize_text(getattr(result, "caption", ""))
+    description = normalize_text(getattr(result, "description", ""))
+    title = normalize_text(getattr(result, "title", ""))
+    candidates = [transcript, caption, description, title]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        sentences = split_sentences(candidate)
+        if len(sentences) > 1:
+            remaining = " ".join(sentences[1:3]).strip()
+            if remaining:
+                return truncate_words(remaining, 38)
+        if candidate != hook:
+            return truncate_words(candidate, 38)
+    return ""
+
+
+def enrich_result_text(result):
+    title = normalize_text(getattr(result, "title", ""))
+    description = normalize_text(getattr(result, "description", ""))
+    caption = normalize_text(getattr(result, "caption", "")) or description
+    transcript = normalize_text(getattr(result, "transcript", ""))
+
+    if transcript and caption and transcript.lower() == caption.lower():
+        transcript = ""
+    if transcript and title and transcript.lower() == title.lower():
+        transcript = ""
+
+    result.title = title
+    result.description = description
+    result.caption = caption
+    result.transcript = transcript
+    if transcript and not getattr(result, "transcript_source", ""):
+        result.transcript_source = "spoken_text"
+
+    hook = derive_hook(result)
+    result.hook = hook
+    result.content = derive_content(result, hook)
+    return result
+
+
+def format_idr(value: int) -> str:
+    return f"Rp{value:,.0f}".replace(",", ".")
+
+
+def get_plan_catalog():
+    plans = []
+    for code, plan in PLAN_CATALOG.items():
+        plans.append(
+            {
+                **plan,
+                "code": code,
+                "price_label": format_idr(plan["price_idr"]),
+                "checkout_url": os.getenv(plan["env_key"], "").strip(),
+            }
+        )
+    return plans
+
+
+def render_public_account_page(
+    *,
+    title: str,
+    eyebrow: str,
+    heading: str,
+    subheading: str,
+    primary_label: str,
+    secondary_label: str,
+    secondary_href: str,
+    form_fields: str,
+    aside_title: str,
+    aside_body: str,
+    aside_list: list[str],
+    footer_note: str,
+):
+    aside_items = "".join(f"<li>{item}</li>" for item in aside_list)
+    return f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {{
+  --bg: #f7efe4;
+  --ink: #1f1711;
+  --soft: #725a4b;
+  --muted: #9b8576;
+  --line: rgba(80, 52, 31, 0.12);
+  --card: rgba(255,255,255,0.84);
+  --accent: #ef5a29;
+  --accent-2: #ff8d42;
+  --accent-soft: rgba(239,90,41,0.1);
+  --green: #295d57;
+}}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--ink);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(239,90,41,0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(41,93,87,0.14), transparent 24%),
+    linear-gradient(180deg, #fffaf4 0%, #f7efe4 56%, #f0e2d2 100%);
+}}
+body::before {{
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(80,52,31,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80,52,31,0.03) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.65), transparent 90%);
+}}
+.page {{ position: relative; z-index: 1; padding: 28px 16px 36px; }}
+.shell {{ width: min(1120px, 100%); margin: 0 auto; }}
+.topbar {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}}
+.brand {{
+  font-family: 'DM Serif Display', serif;
+  font-size: 34px;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+  color: var(--ink);
+}}
+.brand span {{ color: var(--accent); }}
+.topnav {{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}}
+.topnav a {{
+  text-decoration: none;
+  color: var(--soft);
+  font-size: 14px;
+  font-weight: 700;
+}}
+.button {{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 18px;
+  border-radius: 999px;
+  font-weight: 800;
+  text-decoration: none;
+}}
+.button.primary {{
+  color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 18px 36px rgba(239,90,41,0.2);
+}}
+.button.soft {{
+  color: var(--ink);
+  background: rgba(255,255,255,0.7);
+  border: 1px solid var(--line);
+}}
+.layout {{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 18px;
+  align-items: stretch;
+}}
+.panel {{
+  border-radius: 32px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 28px 70px rgba(96, 67, 45, 0.12);
+  backdrop-filter: blur(14px);
+}}
+.main-panel {{ padding: 30px; }}
+.eyebrow {{
+  display: inline-flex;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid var(--line);
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 800;
+}}
+h1 {{
+  margin-top: 16px;
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(44px, 6vw, 78px);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}}
+.lead {{
+  margin-top: 16px;
+  color: var(--soft);
+  font-size: 17px;
+  line-height: 1.8;
+  max-width: 660px;
+}}
+.card-row {{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}}
+.info-card {{
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid var(--line);
+}}
+.info-card strong {{
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
+}}
+.info-card span {{
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}}
+.form-panel {{
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}}
+.form-panel h2 {{
+  font-size: 26px;
+  line-height: 1.05;
+}}
+.form-panel p {{
+  color: var(--soft);
+  line-height: 1.7;
+  font-size: 14px;
+}}
+.field {{
+  display: grid;
+  gap: 6px;
+}}
+.field label {{
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--soft);
+}}
+.field input, .field select {{
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.88);
+  font: inherit;
+  color: var(--ink);
+}}
+.submit {{
+  border: 0;
+  cursor: pointer;
+  padding: 15px 18px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+  font: inherit;
+  font-weight: 800;
+}}
+.sub-actions {{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}}
+.sub-actions a {{
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}}
+.aside-panel {{
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}}
+.aside-panel h3 {{
+  font-size: 24px;
+  line-height: 1.08;
+}}
+.aside-panel p {{
+  color: var(--soft);
+  line-height: 1.75;
+  font-size: 14px;
+}}
+.aside-panel ul {{
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}}
+.aside-panel li {{
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--line);
+  color: var(--soft);
+  font-size: 13px;
+  line-height: 1.6;
+}}
+.note {{
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(41,93,87,0.1);
+  color: var(--green);
+  font-size: 13px;
+  line-height: 1.65;
+}}
+@media (max-width: 960px) {{
+  .layout {{ grid-template-columns: 1fr; }}
+  .card-row {{ grid-template-columns: 1fr; }}
+  .topbar {{ flex-direction: column; align-items: flex-start; }}
+}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="shell">
+    <div class="topbar">
+      <a class="brand" href="/">Sin<span>yal</span></a>
+      <div class="topnav">
+        <a href="/signin">Masuk</a>
+        <a href="/signup">Daftar</a>
+        <a href="/payment" class="button soft">Lihat Pembayaran</a>
+        <a href="/app" class="button primary">Masuk ke App</a>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="panel main-panel">
+        <div class="eyebrow">{eyebrow}</div>
+        <h1>{heading}</h1>
+        <p class="lead">{subheading}</p>
+        <div class="card-row">
+          <div class="info-card">
+            <strong>Flow yang saya pilih</strong>
+            <span>Masuk, pilih paket, checkout, lalu akses aplikasi aktif otomatis begitu pembayaran masuk.</span>
+          </div>
+          <div class="info-card">
+            <strong>Untuk market Indonesia</strong>
+            <span>Bahasa dibuat sederhana, pilihan paket jelas, dan metode bayar diarahkan ke gateway lokal yang lebih cocok.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel form-panel">
+        <div>
+          <h2>{primary_label}</h2>
+          <p>{footer_note}</p>
+        </div>
+        {form_fields}
+        <button class="submit" type="button">{primary_label}</button>
+        <div class="sub-actions">
+          <a href="{secondary_href}">{secondary_label}</a>
+          <a href="/payment">Lihat paket dulu</a>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:18px"></div>
+
+    <div class="panel aside-panel">
+      <div>
+        <h3>{aside_title}</h3>
+        <p>{aside_body}</p>
+      </div>
+      <ul>{aside_items}</ul>
+      <div class="note">{footer_note}</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+def render_payment_page():
+    plan_cards = []
+    for plan in get_plan_catalog():
+        featured = " featured" if plan["code"] == "tumbuh" else ""
+        badge = "Paling dipilih" if plan["code"] == "tumbuh" else "Langganan"
+        button_href = f"/checkout/{plan['code']}"
+        button_label = plan["cta"]
+        readiness = (
+            "Checkout Mayar siap dipakai."
+            if plan["checkout_url"]
+            else "Belum ada link Mayar di environment. Tinggal isi env lalu aktif."
+        )
+        limits_html = "".join(f"<li>{item}</li>" for item in plan["limits"])
+        plan_cards.append(
+            f"""
+            <div class="plan-card{featured}">
+              <div class="plan-badge">{badge}</div>
+              <h3>{plan['name']}</h3>
+              <div class="plan-price">{plan['price_label']}<small>/ bulan</small></div>
+              <p class="plan-tagline">{plan['tagline']}</p>
+              <ul class="plan-list">{limits_html}</ul>
+              <a class="plan-button" href="{button_href}">{button_label}</a>
+              <div class="plan-note">{readiness}</div>
+            </div>
+            """
+        )
+
+    plans_html = "".join(plan_cards)
+    return f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pembayaran Sinyal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {{
+  --bg: #f7f1e8;
+  --ink: #1e1711;
+  --soft: #6f5b4b;
+  --muted: #9a8779;
+  --line: rgba(80, 52, 31, 0.12);
+  --card: rgba(255,255,255,0.84);
+  --card-strong: rgba(255,255,255,0.94);
+  --accent: #ef5a29;
+  --accent-2: #ff8d42;
+  --green: #2f5f57;
+}}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--ink);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(239,90,41,0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(47,95,87,0.14), transparent 26%),
+    linear-gradient(180deg, #fffaf4 0%, #f7f1e8 58%, #f0e3d4 100%);
+}}
+body::before {{
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(80,52,31,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80,52,31,0.03) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.65), transparent 90%);
+}}
+.page {{ position: relative; z-index: 1; padding: 28px 16px 40px; }}
+.shell {{ width: min(1180px, 100%); margin: 0 auto; }}
+.topbar {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 24px;
+}}
+.brand {{
+  font-family: 'DM Serif Display', serif;
+  font-size: 34px;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+  color: var(--ink);
+}}
+.brand span {{ color: var(--accent); }}
+.topnav {{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}}
+.topnav a {{
+  text-decoration: none;
+  color: var(--soft);
+  font-size: 14px;
+  font-weight: 700;
+}}
+.hero {{
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: 18px;
+  align-items: stretch;
+}}
+.panel {{
+  border-radius: 34px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 28px 70px rgba(95, 67, 45, 0.12);
+  backdrop-filter: blur(14px);
+}}
+.hero-copy {{
+  padding: 30px;
+}}
+.eyebrow {{
+  display: inline-flex;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid var(--line);
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 800;
+}}
+.hero-copy h1 {{
+  margin-top: 16px;
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(46px, 6vw, 82px);
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+}}
+.hero-copy p {{
+  margin-top: 16px;
+  color: var(--soft);
+  font-size: 17px;
+  line-height: 1.8;
+  max-width: 640px;
+}}
+.mini-grid {{
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}}
+.mini-card {{
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid var(--line);
+}}
+.mini-card strong {{
+  display: block;
+  font-size: 24px;
+  margin-bottom: 4px;
+}}
+.mini-card span {{
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}}
+.aside {{
+  padding: 24px;
+  display: grid;
+  gap: 14px;
+}}
+.aside h3 {{
+  font-size: 26px;
+  line-height: 1.06;
+}}
+.aside p {{
+  color: var(--soft);
+  font-size: 14px;
+  line-height: 1.75;
+}}
+.aside-box {{
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid var(--line);
+}}
+.aside-box strong {{
+  display: block;
+  margin-bottom: 6px;
+}}
+.aside-box span {{
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}}
+.pricing {{
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}}
+.plan-card {{
+  padding: 24px;
+  border-radius: 30px;
+  background: var(--card-strong);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 48px rgba(95, 67, 45, 0.08);
+}}
+.plan-card.featured {{
+  background: linear-gradient(180deg, rgba(239,90,41,0.14), rgba(255,255,255,0.97));
+  border-color: rgba(239,90,41,0.24);
+}}
+.plan-badge {{
+  display: inline-flex;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(239,90,41,0.1);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}}
+.plan-card h3 {{
+  font-size: 25px;
+  margin-bottom: 8px;
+}}
+.plan-price {{
+  font-family: 'DM Serif Display', serif;
+  font-size: 44px;
+  letter-spacing: -0.05em;
+}}
+.plan-price small {{
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  color: var(--muted);
+}}
+.plan-tagline {{
+  margin: 12px 0 14px;
+  color: var(--soft);
+  line-height: 1.7;
+}}
+.plan-list {{
+  list-style: none;
+  display: grid;
+  gap: 9px;
+  color: var(--soft);
+  font-size: 14px;
+  line-height: 1.65;
+  min-height: 160px;
+}}
+.plan-button {{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  text-decoration: none;
+  font-weight: 800;
+  color: white;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 16px 32px rgba(239,90,41,0.18);
+}}
+.plan-note {{
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}}
+.footnote {{
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(47,95,87,0.1);
+  color: var(--green);
+  font-size: 13px;
+  line-height: 1.7;
+}}
+@media (max-width: 980px) {{
+  .hero, .pricing, .mini-grid {{ grid-template-columns: 1fr; }}
+  .topbar {{ flex-direction: column; align-items: flex-start; }}
+}}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="shell">
+    <div class="topbar">
+      <a class="brand" href="/">Sin<span>yal</span></a>
+      <div class="topnav">
+        <a href="/signin">Masuk</a>
+        <a href="/signup">Daftar</a>
+        <a href="/app">Buka App</a>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="panel hero-copy">
+        <div class="eyebrow">Checkout akses Sinyal</div>
+        <h1>Satu halaman bayar yang rapi, jelas, dan siap untuk market Indonesia.</h1>
+        <p>Saya arahkan payment MVP ke Mayar dulu supaya kita bisa launch cepat. User pilih paket, masuk ke checkout hosted, lalu akses aktif begitu webhook pembayaran masuk ke backend dan database.</p>
+        <div class="mini-grid">
+          <div class="mini-card"><strong>Mayar</strong><span>Checkout hosted yang lebih cepat dipakai untuk MVP.</span></div>
+          <div class="mini-card"><strong>Supabase</strong><span>Auth + session + Postgres di satu stack yang ringkas.</span></div>
+          <div class="mini-card"><strong>Webhook</strong><span>Status bayar masuk ke subscription dan akses user otomatis.</span></div>
+        </div>
+      </div>
+
+      <div class="panel aside">
+        <div>
+          <h3>Yang terjadi setelah user klik bayar</h3>
+          <p>Bukan cuma invoice link. Flow backend-nya tetap saya pikirkan sebagai produk SaaS sungguhan.</p>
+        </div>
+        <div class="aside-box">
+          <strong>1. Redirect ke Mayar</strong>
+          <span>User dibawa ke hosted checkout atau product page yang sesuai dengan paket yang dipilih.</span>
+        </div>
+        <div class="aside-box">
+          <strong>2. Webhook masuk</strong>
+          <span>Backend mencatat transaksi, update invoice, dan aktifkan subscription di Postgres.</span>
+        </div>
+        <div class="aside-box">
+          <strong>3. App kasih akses</strong>
+          <span>Quota dan fitur dibaca dari plan aktif user, bukan dari frontend semata.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pricing">
+      {plans_html}
+    </div>
+
+    <div class="footnote">
+      Payment awal saya arahkan ke Mayar karena paling cepat untuk launch. Begitu volume naik dan kita butuh kontrol billing yang lebih dalam, flow ini masih bisa dipindah ke gateway direct tanpa buang fondasi auth dan Postgres.
+    </div>
+  </div>
+</div>
+</body>
+</html>"""
+
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    return HTML_UI
+    return LANDING_HTML
+
+
+@app.get("/signup", response_class=HTMLResponse)
+async def signup_page():
+    return render_public_account_page(
+        title="Daftar Sinyal",
+        eyebrow="Buka akun baru",
+        heading="Bikin akun, pilih paket, lalu langsung mulai riset.",
+        subheading="Halaman ini saya siapkan buat flow onboarding produk. Setelah auth dan payment kita hubungkan, user tinggal daftar, pilih paket, lalu masuk ke dashboard tanpa bingung.",
+        primary_label="Daftar Sekarang",
+        secondary_label="Sudah punya akun? Masuk di sini",
+        secondary_href="/signin",
+        form_fields="""
+        <div class="field"><label>Nama lengkap</label><input type="text" placeholder="Nama kamu atau nama tim"></div>
+        <div class="field"><label>Email kerja</label><input type="email" placeholder="nama@brand.com"></div>
+        <div class="field"><label>Password</label><input type="password" placeholder="Minimal 8 karakter"></div>
+        <div class="field"><label>Kamu pakai untuk apa?</label><select><option>Riset konten</option><option>Vetting creator</option><option>Agency / tim sosial media</option><option>UMKM / brand</option></select></div>
+        """,
+        aside_title="Stack yang saya arahkan",
+        aside_body="Untuk versi production, signup ini saya arahkan ke Supabase Auth. Jadi email login, session, reset password, dan proteksi route nggak perlu kita bangun dari nol, lalu status langganan dibaca dari Postgres.",
+        aside_list=[
+            "Auth: Supabase Auth untuk email/password, session, reset password, dan proteksi user.",
+            "Database: Postgres supaya user, paket, billing status, saved search, dan usage tinggal disimpan rapi di satu tempat.",
+            "Billing: Setelah pembayaran Mayar valid, role atau plan user langsung aktif dari database.",
+        ],
+        footer_note="Versi sekarang masih page flow. Begitu kredensial auth siap, saya bisa sambungkan halaman ini ke backend sungguhan.",
+    )
+
+
+@app.get("/signin", response_class=HTMLResponse)
+async def signin_page():
+    return render_public_account_page(
+        title="Masuk Sinyal",
+        eyebrow="Masuk ke akun kamu",
+        heading="Masuk cepat, lalu lanjut ke workspace risetmu.",
+        subheading="Signin saya arahkan ke flow yang simpel: email, password, lalu langsung cek status paket dan akses fitur sesuai plan user.",
+        primary_label="Masuk",
+        secondary_label="Belum punya akun? Daftar sekarang",
+        secondary_href="/signup",
+        form_fields="""
+        <div class="field"><label>Email</label><input type="email" placeholder="nama@brand.com"></div>
+        <div class="field"><label>Password</label><input type="password" placeholder="Masukkan password"></div>
+        <div class="field"><label>Mode kerja</label><select><option>Ingat saya di perangkat ini</option><option>Perangkat tim bersama</option></select></div>
+        """,
+        aside_title="Yang akan dicek setelah login",
+        aside_body="Sebagai fullstack flow, login bukan cuma buka halaman. Setelah user masuk, backend harus baca status plan, kuota, dan izin fitur dari Postgres yang sudah diupdate dari pembayaran Mayar.",
+        aside_list=[
+            "Cek paket aktif atau belum.",
+            "Cek kuota search, profile, comment, dan transcript bulan berjalan.",
+            "Kalau billing bermasalah, arahkan user ke halaman payment tanpa muter-muter.",
+        ],
+        footer_note="Signin ini nanti paling aman pakai session/Auth provider, bukan custom token buatan sendiri tanpa fondasi yang jelas.",
+    )
+
+
+@app.get("/payment", response_class=HTMLResponse)
+async def payment_page():
+    return render_payment_page()
+
+
+@app.get("/checkout/{plan_code}")
+async def checkout_plan(plan_code: str):
+    plan = PLAN_CATALOG.get(plan_code)
+    if not plan:
+        return JSONResponse({"error": "Unknown plan"}, 404)
+
+    checkout_url = os.getenv(plan["env_key"], "").strip()
+    if not checkout_url:
+        return HTMLResponse(
+            f"""
+            <html lang="id"><body style="font-family: sans-serif; padding: 32px">
+            <h1>Checkout belum aktif</h1>
+            <p>Link Mayar untuk <strong>{plan['name']}</strong> belum diisi di environment.</p>
+            <p>Isi env <code>{plan['env_key']}</code> lalu buka lagi route ini.</p>
+            <p><a href="/payment">Kembali ke halaman payment</a></p>
+            </body></html>
+            """,
+            status_code=503,
+        )
+
+    return RedirectResponse(checkout_url, status_code=302)
+
+
+@app.get("/api/billing/plans")
+async def billing_plans():
+    return {"plans": get_plan_catalog()}
+
+
+@app.post("/api/payment/webhook/mayar")
+async def mayar_webhook(payload: dict):
+    # Temporary ingestion point until Supabase/Postgres wiring is connected.
+    return {"received": True, "provider": "mayar", "keys": sorted(payload.keys())}
+
+@app.get("/app", response_class=HTMLResponse)
+async def app_page():
+    return APP_HTML
 
 
 @app.get("/api/search")
@@ -38,9 +951,31 @@ async def search(
     platforms: str = Query("tiktok,youtube,instagram,twitter,facebook"),
     max: int = Query(5, ge=1, le=50),
     sort: str = Query("relevance"),
+    date_range: str = Query("all"),
+    min_views: int | None = Query(None),
+    max_views: int | None = Query(None),
     min_likes: int | None = Query(None),
     max_likes: int | None = Query(None),
 ):
+    cache_key = (
+        q.strip(),
+        platforms,
+        max,
+        sort,
+        date_range,
+        min_views,
+        max_views,
+        min_likes,
+        max_likes,
+    )
+    cached = SEARCH_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < SEARCH_CACHE_TTL_SECONDS:
+        return {
+            **cached[1],
+            "cached": True,
+            "elapsed": "<1s (cached)",
+        }
+
     platform_list = [p.strip() for p in platforms.split(",") if p.strip() in SCRAPERS]
     if not platform_list:
         return JSONResponse({"error": "No valid platforms"}, 400)
@@ -55,8 +990,42 @@ async def search(
     start = time.time()
 
     async def scrape_platform(name, keyword):
+        task_cache_key = (
+            name,
+            keyword,
+            max,
+            sort,
+            min_likes,
+            max_likes,
+        )
+        cached_task = PLATFORM_SEARCH_CACHE.get(task_cache_key)
+        if cached_task and time.time() - cached_task[0] < SEARCH_CACHE_TTL_SECONDS:
+            return cached_task[1]
+
         scraper = SCRAPERS[name]()
-        return await loop.run_in_executor(executor, partial(scraper.search, keyword, max))
+        if name == "tiktok":
+            work = partial(
+                scraper.search,
+                keyword,
+                max,
+                sort=sort,
+                min_likes=min_likes,
+                max_likes=max_likes,
+            )
+        else:
+            work = partial(scraper.search, keyword, max)
+
+        try:
+            results = await asyncio.wait_for(
+                loop.run_in_executor(executor, work),
+                timeout=SCRAPE_TIMEOUT_SECONDS,
+            )
+            PLATFORM_SEARCH_CACHE[task_cache_key] = (time.time(), results)
+            return results
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(
+                f"{name} scrape timed out after {SCRAPE_TIMEOUT_SECONDS}s"
+            ) from exc
 
     tasks = [
         scrape_platform(p, kw)
@@ -71,7 +1040,15 @@ async def search(
         elif result:
             all_results.extend(result)
 
+    all_results = [enrich_result_text(result) for result in all_results]
+
     # Apply filters
+    if date_range != "all":
+        all_results = filter_results_by_date_range(all_results, date_range)
+    if min_views is not None:
+        all_results = [r for r in all_results if (r.views or 0) >= min_views]
+    if max_views is not None:
+        all_results = [r for r in all_results if (r.views or 0) <= max_views]
     if min_likes is not None:
         all_results = [r for r in all_results if (r.likes or 0) >= min_likes]
     if max_likes is not None:
@@ -91,15 +1068,18 @@ async def search(
     if all_results:
         json_file, csv_file = save_results(all_results, keywords[0])
 
-    return {
+    payload = {
         "keywords": keywords,
         "platforms": platform_list,
         "total": len(all_results),
         "elapsed": f"{elapsed:.1f}s",
+        "cached": False,
         "json_file": json_file,
         "csv_file": csv_file,
         "results": [r.to_dict() for r in all_results],
     }
+    SEARCH_CACHE[cache_key] = (time.time(), payload)
+    return payload
 
 
 @app.get("/api/profile")
@@ -107,7 +1087,17 @@ async def profile(
     username: str = Query(...),
     max: int = Query(10, ge=1, le=50),
     sort: str = Query("latest"),
+    date_range: str = Query("all"),
 ):
+    cache_key = (username.lstrip("@").lower(), max, sort, date_range)
+    cached = PROFILE_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < PROFILE_CACHE_TTL_SECONDS:
+        return {
+            **cached[1],
+            "cached": True,
+            "elapsed": "<1s (cached)",
+        }
+
     loop = asyncio.get_event_loop()
     start = time.time()
 
@@ -115,20 +1105,88 @@ async def profile(
     results = await loop.run_in_executor(
         executor, partial(scraper.scrape_profile, username, max, sort)
     )
+    results = [enrich_result_text(result) for result in results]
+    if date_range != "all":
+        results = filter_results_by_date_range(results, date_range)
 
     elapsed = time.time() - start
     json_file = csv_file = None
     if results:
         json_file, csv_file = save_results(results, f"profile_{username}")
 
-    return {
+    payload = {
         "username": username,
         "total": len(results),
         "elapsed": f"{elapsed:.1f}s",
+        "cached": False,
         "json_file": json_file,
         "csv_file": csv_file,
         "results": [r.to_dict() for r in results],
     }
+    PROFILE_CACHE[cache_key] = (time.time(), payload)
+    return payload
+
+
+def filter_results_by_date_range(results, date_range: str):
+    days_lookup = {"7d": 7, "30d": 30}
+    days = days_lookup.get(date_range)
+    if not days:
+        return results
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    filtered = []
+    for result in results:
+        parsed = parse_upload_date(result.upload_date)
+        if parsed and parsed >= cutoff:
+            filtered.append(result)
+    return filtered
+
+
+def parse_upload_date(value: str | None):
+    if not value:
+        return None
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    if raw.isdigit():
+        try:
+            timestamp = int(raw)
+            if timestamp > 10_000_000_000:
+                timestamp = timestamp / 1000
+            return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return None
+
+    for parser in (datetime.fromisoformat,):
+        try:
+            parsed = parser(raw.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except ValueError:
+            pass
+
+    match = re.match(r"^(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago$", raw.lower())
+    if not match:
+        return None
+
+    amount = int(match.group(1))
+    unit = match.group(2)
+    if unit == "minute":
+        delta = timedelta(minutes=amount)
+    elif unit == "hour":
+        delta = timedelta(hours=amount)
+    elif unit == "day":
+        delta = timedelta(days=amount)
+    elif unit == "week":
+        delta = timedelta(weeks=amount)
+    elif unit == "month":
+        delta = timedelta(days=30 * amount)
+    else:
+        delta = timedelta(days=365 * amount)
+    return datetime.now(timezone.utc) - delta
 
 
 @app.get("/api/comments")
@@ -136,12 +1194,31 @@ async def comments(
     url: str = Query(...),
     max: int = Query(50, ge=1, le=200),
 ):
+    cache_key = (url, max)
+    cached = COMMENTS_CACHE.get(cache_key)
+    if cached and time.time() - cached[0] < COMMENTS_CACHE_TTL_SECONDS:
+        return {
+            **cached[1],
+            "cached": True,
+        }
+
     loop = asyncio.get_event_loop()
     scraper = TikTokScraper()
     result = await loop.run_in_executor(
         executor, partial(scraper.scrape_comments, url, max)
     )
-    return {"url": url, "total": len(result), "comments": result}
+    video_comment_count = await loop.run_in_executor(
+        executor, partial(scraper.get_video_comment_count, url)
+    )
+    payload = {
+        "url": url,
+        "total": len(result),
+        "video_comment_count": video_comment_count,
+        "cached": False,
+        "comments": result,
+    }
+    COMMENTS_CACHE[cache_key] = (time.time(), payload)
+    return payload
 
 
 @app.get("/api/download")
@@ -153,72 +1230,1002 @@ async def download(file: str = Query(...)):
     return FileResponse(file, filename=os.path.basename(file))
 
 
-HTML_UI = """<!DOCTYPE html>
+LANDING_HTML = """<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sinyal - Mesin Cari Sosial Media untuk Indonesia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f8f0e4;
+  --bg-soft: #fff9f2;
+  --ink: #20160f;
+  --soft: #705b4c;
+  --muted: #9a8474;
+  --line: rgba(84, 52, 29, 0.12);
+  --card: rgba(255, 250, 244, 0.82);
+  --card-strong: rgba(255, 255, 255, 0.92);
+  --accent: #ef5a29;
+  --accent-2: #ff8d42;
+  --accent-soft: rgba(239, 90, 41, 0.12);
+  --green: #285f58;
+  --green-soft: rgba(40, 95, 88, 0.12);
+  --radius-xl: 34px;
+  --radius-lg: 28px;
+  --radius-md: 22px;
+  --shadow: 0 30px 70px rgba(98, 66, 43, 0.12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(239, 90, 41, 0.15), transparent 28%),
+    radial-gradient(circle at top right, rgba(40, 95, 88, 0.14), transparent 26%),
+    linear-gradient(180deg, #fffaf4 0%, #f8f0e4 58%, #f1e5d8 100%);
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(84, 52, 29, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(84, 52, 29, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.72), transparent 88%);
+}
+.page { position: relative; z-index: 1; }
+.container { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+.glass {
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(255, 250, 244, 0.7);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(84, 52, 29, 0.08);
+}
+.nav-inner {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.brand {
+  font-family: 'DM Serif Display', serif;
+  font-size: 34px;
+  letter-spacing: -0.04em;
+}
+.brand span { color: var(--accent); }
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.nav-links a {
+  text-decoration: none;
+  color: var(--soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 800;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.button:hover { transform: translateY(-1px); }
+.button.primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+  box-shadow: 0 18px 36px rgba(239, 90, 41, 0.22);
+}
+.button.secondary {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+}
+.hero {
+  padding: 44px 0 30px;
+}
+.hero-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(320px, 0.98fr);
+  gap: 22px;
+  align-items: stretch;
+}
+.hero-copy {
+  padding: 18px 4px 8px 0;
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.74);
+  border: 1px solid var(--line);
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 800;
+}
+.eyebrow::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.hero h1 {
+  margin-top: 18px;
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(50px, 7vw, 94px);
+  line-height: 0.92;
+  letter-spacing: -0.05em;
+}
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
+.hero p {
+  margin-top: 18px;
+  max-width: 640px;
+  color: var(--soft);
+  font-size: 18px;
+  line-height: 1.78;
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+.hero-strip {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.mini-pill {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.62);
+  border: 1px solid var(--line);
+  color: var(--soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+.hero-ui {
+  border-radius: 34px;
+  overflow: hidden;
+}
+.hero-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 12px;
+}
+.hero-topbar strong {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.toggle {
+  border: 0;
+  cursor: pointer;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(239, 90, 41, 0.08);
+  color: var(--soft);
+  font-weight: 800;
+  font-size: 13px;
+}
+.toggle.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+}
+.showcase {
+  padding: 0 20px 20px;
+}
+.search-shell {
+  border-radius: 28px;
+  background: rgba(255,255,255,0.86);
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  padding: 16px;
+}
+.search-input {
+  width: 100%;
+  border-radius: 18px;
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  background: #fff;
+  padding: 16px 18px;
+  font-size: 15px;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.chip {
+  padding: 9px 12px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+.data-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 12px;
+}
+.results-column, .metric-column {
+  display: grid;
+  gap: 12px;
+}
+.result-card, .metric-card {
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  padding: 14px;
+}
+.result-card strong, .metric-card strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.result-card span, .metric-card span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.metric-card.highlight {
+  background: linear-gradient(135deg, rgba(239, 90, 41, 0.12), rgba(255,255,255,0.96));
+}
+.stats-row {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.stat-box {
+  border-radius: 20px;
+  padding: 14px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid var(--line);
+}
+.stat-box strong {
+  display: block;
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+.stat-box span {
+  color: var(--muted);
+  font-size: 13px;
+}
+section { padding: 30px 0; }
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+.section-head h2 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(34px, 4vw, 54px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+.section-head p {
+  max-width: 520px;
+  color: var(--soft);
+  line-height: 1.75;
+}
+.value-grid {
+  display: grid;
+  grid-template-columns: 1.08fr 0.92fr 0.92fr;
+  gap: 16px;
+}
+.value-card {
+  padding: 24px;
+  border-radius: 30px;
+}
+.value-card h3 {
+  font-size: 22px;
+  margin-bottom: 10px;
+}
+.value-card p {
+  color: var(--soft);
+  line-height: 1.72;
+}
+.value-card.big {
+  background: linear-gradient(135deg, rgba(239, 90, 41, 0.12), rgba(255,255,255,0.94));
+}
+.stack-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+.stack-item {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  font-size: 14px;
+  color: var(--soft);
+  line-height: 1.6;
+}
+.mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.mode-tab {
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.72);
+  color: var(--soft);
+  font-weight: 800;
+  cursor: pointer;
+}
+.mode-tab.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+.scenario-panel {
+  display: none;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 30px;
+}
+.scenario-panel.active {
+  display: grid;
+}
+.scenario-copy {
+  padding: 10px;
+}
+.scenario-copy h3 {
+  font-size: 26px;
+  line-height: 1.08;
+  margin-bottom: 10px;
+}
+.scenario-copy p {
+  color: var(--soft);
+  line-height: 1.75;
+}
+.scenario-points {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+.scenario-point {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(84, 52, 29, 0.08);
+  color: var(--soft);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.scenario-shot {
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255,255,255,0.76);
+  border: 1px solid rgba(84, 52, 29, 0.08);
+}
+.shot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.shot-header strong {
+  font-size: 16px;
+}
+.shot-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.feed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.feed-card {
+  min-height: 120px;
+  border-radius: 20px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(239, 90, 41, 0.12), rgba(255,255,255,0.94));
+  border: 1px solid rgba(84, 52, 29, 0.08);
+}
+.feed-card strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+.feed-card span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.pricing-wrap {
+  padding: 26px;
+  border-radius: 36px;
+}
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.price-card {
+  padding: 22px;
+  border-radius: 28px;
+  background: rgba(255,255,255,0.88);
+  border: 1px solid var(--line);
+}
+.price-card.featured {
+  background: linear-gradient(180deg, rgba(239, 90, 41, 0.14), rgba(255,255,255,0.96));
+  border-color: rgba(239, 90, 41, 0.22);
+}
+.badge {
+  display: inline-flex;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.price-card h3 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+.price {
+  font-family: 'DM Serif Display', serif;
+  font-size: 44px;
+  letter-spacing: -0.05em;
+}
+.price small {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  color: var(--muted);
+}
+.price-note {
+  margin: 12px 0 14px;
+  color: var(--soft);
+  line-height: 1.7;
+}
+.price-list {
+  display: grid;
+  gap: 8px;
+  color: var(--soft);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.price-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 16px;
+  padding: 13px 16px;
+  border-radius: 18px;
+  text-decoration: none;
+  color: white;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 16px 32px rgba(239, 90, 41, 0.18);
+}
+.cta-panel {
+  padding: 28px;
+  border-radius: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: linear-gradient(135deg, rgba(239, 90, 41, 0.16), rgba(40, 95, 88, 0.12));
+}
+.cta-panel h2 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 42px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  margin-bottom: 10px;
+}
+.cta-panel p {
+  color: var(--soft);
+  line-height: 1.72;
+  max-width: 640px;
+}
+footer {
+  padding: 26px 0 48px;
+  color: var(--muted);
+  font-size: 14px;
+}
+@media (max-width: 980px) {
+  .hero-shell, .value-grid, .pricing-grid, .scenario-panel, .data-grid { grid-template-columns: 1fr; }
+  .section-head, .cta-panel, .nav-inner { flex-direction: column; align-items: flex-start; }
+  .stats-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .hero h1 { font-size: 54px; }
+  .feed-grid { grid-template-columns: 1fr; }
+  .toggle-group, .nav-links { width: 100%; }
+  .toggle, .mode-tab { flex: 1; text-align: center; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <nav>
+    <div class="container nav-inner">
+      <div class="brand">Sin<span>yal</span></div>
+      <div class="nav-links">
+        <a href="#nilai">Nilai</a>
+        <a href="#pakai">Cara Pakai</a>
+        <a href="#harga">Harga</a>
+        <a href="/signin">Masuk</a>
+        <a href="/signup">Daftar</a>
+        <a class="button secondary" href="/payment">Bayar</a>
+        <a class="button primary" href="/app">Coba Sekarang</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container hero-shell">
+      <div class="hero-copy">
+        <div class="eyebrow">Dibuat khusus buat cari sinyal sosial media di Indonesia</div>
+        <h1>Cari topik, creator, dan <em>isi obrolan pasar</em> dalam satu layar.</h1>
+        <p>Sinyal bukan dashboard yang bikin pusing. Tinggal ketik topik, pilih platform, lalu baca hasil yang sudah dirapikan: views, komentar, profil creator, sampai transkrip video.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="/signup">Mulai Daftar</a>
+          <a class="button secondary" href="/payment">Lihat Paket</a>
+        </div>
+        <div class="hero-strip">
+          <div class="mini-pill">Pakai bahasa Indonesia</div>
+          <div class="mini-pill">Tidak perlu paham teknis</div>
+          <div class="mini-pill">Cocok untuk agency, brand, UMKM</div>
+        </div>
+      </div>
+
+      <div class="hero-ui glass">
+        <div class="hero-topbar">
+          <strong>Preview interaktif</strong>
+          <div class="toggle-group">
+            <button class="toggle active" type="button" data-demo="tren">Lagi rame</button>
+            <button class="toggle" type="button" data-demo="creator">Vetting creator</button>
+            <button class="toggle" type="button" data-demo="komentar">Baca komentar</button>
+          </div>
+        </div>
+        <div class="showcase">
+          <div class="search-shell">
+            <input class="search-input" id="demo-query" value="Cari: skincare viral buat remaja" readonly>
+            <div class="filter-row" id="demo-filters">
+              <div class="chip">TikTok</div>
+              <div class="chip">Instagram</div>
+              <div class="chip">30 hari terakhir</div>
+              <div class="chip">Min. 100 ribu views</div>
+            </div>
+            <div class="data-grid">
+              <div class="results-column" id="demo-results">
+                <div class="result-card">
+                  <strong>Hook “3 hari bikin wajah lebih kalem” naik cepat</strong>
+                  <span>Video pendek edukasi + before after ringan paling sering muncul di hasil atas.</span>
+                </div>
+                <div class="result-card">
+                  <strong>Format review jujur lebih disukai</strong>
+                  <span>Komentar banyak membandingkan hasil asli, bukan video yang terlalu promosi.</span>
+                </div>
+              </div>
+              <div class="metric-column" id="demo-metrics">
+                <div class="metric-card highlight">
+                  <strong>Trend score: 8.9/10</strong>
+                  <span>Topik ini sedang ramai dan masih punya ruang untuk ikut masuk.</span>
+                </div>
+                <div class="metric-card">
+                  <strong>Creator aktif: 27 akun</strong>
+                  <span>Bisa langsung buka profil untuk cek performa dan pola postingan.</span>
+                </div>
+              </div>
+            </div>
+            <div class="stats-row" id="demo-stats">
+              <div class="stat-box"><strong>124</strong><span>hasil kepilih</span></div>
+              <div class="stat-box"><strong>2.4 jt</strong><span>rata-rata views</span></div>
+              <div class="stat-box"><strong>18 mnt</strong><span>waktu yang dihemat</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="nilai">
+    <div class="container">
+      <div class="section-head">
+        <h2>Lebih sedikit klik. Lebih cepat paham.</h2>
+        <p>Yang dijual bukan data mentah. Yang dijual adalah rasa cepat ngerti apa yang sedang terjadi.</p>
+      </div>
+      <div class="value-grid">
+        <div class="value-card big glass">
+          <h3>Satu tempat buat kerja yang biasanya pecah ke banyak tab</h3>
+          <p>Cari topik, cek profil, baca komentar, lihat sinyal promosi, dan tangkap isi video. Semua langsung dari satu alur yang gampang diikuti.</p>
+          <div class="stack-list">
+            <div class="stack-item">Cari kata kunci lintas TikTok, Instagram, YouTube, X, dan Facebook.</div>
+            <div class="stack-item">Filter hasil pakai views, likes, tanggal, dan urutan yang masuk akal.</div>
+            <div class="stack-item">Buka profil creator untuk lihat rata-rata performa konten.</div>
+          </div>
+        </div>
+        <div class="value-card glass">
+          <h3>Baca pasar dari komentar nyata</h3>
+          <p>Cari pain point, candaan, pujian, keberatan, dan bahasa asli audiens tanpa tebak-tebakan.</p>
+        </div>
+        <div class="value-card glass">
+          <h3>Pahami video tanpa nonton semua</h3>
+          <p>Transkrip bantu screening cepat. Bagus buat riset konten, pitch, dan shortlist creator.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pakai">
+    <div class="container">
+      <div class="section-head">
+        <h2>Pakai sesuai gaya kerja kamu</h2>
+        <p>Landing page-nya saya bikin lebih interaktif supaya orang langsung kebayang Sinyal dipakai buat apa, bukan cuma baca daftar fitur.</p>
+      </div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" type="button" data-mode="umkm">UMKM</button>
+        <button class="mode-tab" type="button" data-mode="agency">Agency</button>
+        <button class="mode-tab" type="button" data-mode="creator">Creator scout</button>
+      </div>
+
+      <div class="scenario-panel glass active" data-panel="umkm">
+        <div class="scenario-copy">
+          <h3>Cari ide konten dan tahu gaya bahasa pasar sebelum posting.</h3>
+          <p>Buat owner atau admin, fokusnya sederhana: topik apa yang lagi hidup, angle apa yang dipakai kompetitor, dan komentar seperti apa yang paling sering muncul.</p>
+          <div class="scenario-points">
+            <div class="scenario-point">Cari topik seperti “kopi kekinian”, “serum jerawat”, atau “jualan frozen food”.</div>
+            <div class="scenario-point">Lihat konten paling ramai dalam 7 atau 30 hari terakhir.</div>
+            <div class="scenario-point">Ambil bahasa komentar untuk bahan caption, hook, atau penawaran.</div>
+          </div>
+        </div>
+        <div class="scenario-shot">
+          <div class="shot-header">
+            <strong>Contoh hasil</strong>
+            <span class="shot-label">Mode UMKM</span>
+          </div>
+          <div class="feed-grid">
+            <div class="feed-card"><strong>Topik ramai</strong><span>“Serum barrier repair” naik karena banyak komentar soal iritasi ringan.</span></div>
+            <div class="feed-card"><strong>Format menang</strong><span>Video singkat 20-30 detik dengan hook masalah nyata paling cepat naik.</span></div>
+            <div class="feed-card"><strong>Komentar dominan</strong><span>Orang banyak tanya “buat kulit sensitif aman ga?” dan “berapa lama kelihatan hasilnya?”.</span></div>
+            <div class="feed-card"><strong>Arah konten</strong><span>Bisa lanjut ke edukasi, testimoni, atau perbandingan sebelum-sesudah.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scenario-panel glass" data-panel="agency">
+        <div class="scenario-copy">
+          <h3>Riset lebih cepat buat pitch, report, dan shortlist creator.</h3>
+          <p>Buat tim agency, Sinyal dipakai buat memangkas waktu buka tab satu per satu. Fokusnya: siapa yang layak dipantau, topik mana yang sedang naik, dan konten mana yang perform.</p>
+          <div class="scenario-points">
+            <div class="scenario-point">Bandingkan akun creator dari performa rata-rata, engagement, dan pola postingan.</div>
+            <div class="scenario-point">Tarik komentar buat cari pain point dan angle campaign.</div>
+            <div class="scenario-point">Filter hasil dengan views minimum dan tanggal biar report lebih bersih.</div>
+          </div>
+        </div>
+        <div class="scenario-shot">
+          <div class="shot-header">
+            <strong>Contoh hasil</strong>
+            <span class="shot-label">Mode Agency</span>
+          </div>
+          <div class="feed-grid">
+            <div class="feed-card"><strong>Shortlist creator</strong><span>5 akun naik ke atas karena performa stabil dan komentar audiens aktif.</span></div>
+            <div class="feed-card"><strong>Sinyal promosi</strong><span>Konten sponsor bisa dipisah dari konten organik untuk lihat performa asli.</span></div>
+            <div class="feed-card"><strong>Ringkasan cepat</strong><span>Views, likes, komentar, dan transkrip langsung terbaca dalam satu alur.</span></div>
+            <div class="feed-card"><strong>Waktu hemat</strong><span>Riset awal yang biasa makan 1-2 jam bisa dipotong jauh lebih cepat.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scenario-panel glass" data-panel="creator">
+        <div class="scenario-copy">
+          <h3>Cari creator yang pas, bukan cuma yang angkanya besar.</h3>
+          <p>Kalau tugasnya sourcing creator, yang penting bukan cuma followers. Kamu perlu lihat komentar, gaya bahasa, rata-rata views, dan apakah kontennya terlalu promosi atau masih natural.</p>
+          <div class="scenario-points">
+            <div class="scenario-point">Buka profil creator dan lihat rata-rata performa postingan.</div>
+            <div class="scenario-point">Baca komentar untuk cek kualitas interaksi audiens.</div>
+            <div class="scenario-point">Pakai transkrip untuk screening cepat tanpa nonton semua video.</div>
+          </div>
+        </div>
+        <div class="scenario-shot">
+          <div class="shot-header">
+            <strong>Contoh hasil</strong>
+            <span class="shot-label">Mode Creator Scout</span>
+          </div>
+          <div class="feed-grid">
+            <div class="feed-card"><strong>Engagement stabil</strong><span>Akun dengan followers sedang tapi komentar hidup sering lebih menarik.</span></div>
+            <div class="feed-card"><strong>Tone cocok</strong><span>Bahasa video dan komentar lebih nyambung untuk brand lokal.</span></div>
+            <div class="feed-card"><strong>Risiko sponsor</strong><span>Konten terlalu sering promosi bisa terlihat dari pola feed dan caption.</span></div>
+            <div class="feed-card"><strong>Screening cepat</strong><span>Transkrip bantu saring banyak creator tanpa capek nonton satu per satu.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="harga">
+    <div class="container pricing-wrap glass">
+      <div class="section-head">
+        <h2>Mulai dari harga yang masih masuk akal</h2>
+        <p>Harga dibuat ramah buat market Indonesia, tapi tetap pakai batas pemakaian biar server dan scraping-nya sehat.</p>
+      </div>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <div class="badge">Mulai hemat</div>
+          <h3>Paket Ringan</h3>
+          <div class="price">Rp59rb <small>/ bulan</small></div>
+          <div class="price-note">Cocok buat coba rutin tanpa langsung keluar biaya besar.</div>
+          <div class="price-list">
+            <div>30 pencarian per bulan</div>
+            <div>10 cek profil</div>
+            <div>10 tarik komentar</div>
+            <div>10 transkrip video</div>
+          </div>
+          <a class="price-cta" href="/checkout/ringan">Mulai Paket Ringan</a>
+        </div>
+        <div class="price-card featured">
+          <div class="badge">Paling masuk akal</div>
+          <h3>Paket Tumbuh</h3>
+          <div class="price">Rp99rb <small>/ bulan</small></div>
+          <div class="price-note">Pilihan paling aman buat pemakaian rutin tim kecil, brand, atau agency.</div>
+          <div class="price-list">
+            <div>120 pencarian per bulan</div>
+            <div>40 cek profil</div>
+            <div>40 tarik komentar</div>
+            <div>40 transkrip video</div>
+          </div>
+          <a class="price-cta" href="/checkout/tumbuh">Ambil Paket Tumbuh</a>
+        </div>
+        <div class="price-card">
+          <div class="badge">Untuk tim</div>
+          <h3>Paket Tim</h3>
+          <div class="price">Rp299rb <small>/ bulan</small></div>
+          <div class="price-note">Kalau sudah dipakai beberapa orang dan butuh kuota lebih longgar.</div>
+          <div class="price-list">
+            <div>500 pencarian per bulan</div>
+            <div>150 cek profil</div>
+            <div>150 tarik komentar</div>
+            <div>150 transkrip video</div>
+            <div>3 anggota tim</div>
+          </div>
+          <a class="price-cta" href="/checkout/tim">Ambil Paket Tim</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container cta-panel glass">
+      <div>
+        <h2>Masuk, cari topik, lalu rasakan sendiri.</h2>
+        <p>Kalau landing page sebelumnya terasa terlalu banyak bacaannya, versi ini saya bikin lebih visual dan lebih cepat menjelaskan nilainya. Dari sini tinggal masuk ke aplikasi dan coba workflow aslinya.</p>
+      </div>
+      <a class="button primary" href="/signup">Mulai Sekarang</a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      Sinyal membantu orang Indonesia cari topik, creator, komentar, dan transkrip sosial media tanpa harus lompat-lompat antar platform.
+    </div>
+  </footer>
+</div>
+
+<script>
+const heroDemos = {
+  tren: {
+    query: "Cari: skincare viral buat remaja",
+    filters: ["TikTok", "Instagram", "30 hari terakhir", "Min. 100 ribu views"],
+    results: [
+      ["Hook “3 hari bikin wajah lebih kalem” naik cepat", "Video pendek edukasi + before after ringan paling sering muncul di hasil atas."],
+      ["Format review jujur lebih disukai", "Komentar banyak membandingkan hasil asli, bukan video yang terlalu promosi."]
+    ],
+    metrics: [
+      ["Trend score: 8.9/10", "Topik ini sedang ramai dan masih punya ruang untuk ikut masuk."],
+      ["Creator aktif: 27 akun", "Bisa langsung buka profil untuk cek performa dan pola postingan."]
+    ],
+    stats: [["124", "hasil kepilih"], ["2.4 jt", "rata-rata views"], ["18 mnt", "waktu yang dihemat"]]
+  },
+  creator: {
+    query: "Cari: creator finansial Indonesia",
+    filters: ["TikTok", "YouTube", "7 hari terakhir", "Sort: paling banyak views"],
+    results: [
+      ["Akun dengan komentar aktif naik ke atas", "Bukan cuma views, tapi kualitas interaksi juga lebih kelihatan."],
+      ["Konten sponsor bisa dipisah", "Lebih gampang nilai performa organik sebelum shortlist creator."]
+    ],
+    metrics: [
+      ["Engagement rata-rata: 7.4%", "Akun yang stabil lebih mudah dipilih untuk campaign yang butuh trust."],
+      ["Shortlist cepat: 8 akun", "Profil bisa dibuka satu per satu tanpa pindah-pindah platform."]
+    ],
+    stats: [["8", "akun shortlist"], ["7.4%", "engagement rata-rata"], ["3x", "lebih cepat screening"]]
+  },
+  komentar: {
+    query: "Cari: komentar video kopi susu literan",
+    filters: ["TikTok", "Komentar", "30 hari terakhir", "Transkrip aktif"],
+    results: [
+      ["Komentar dominan: kemanisan dan harga", "Audiens paling sering bahas rasa terlalu manis dan porsi yang cocok buat sharing."],
+      ["Caption dan komentar saling nyambung", "Bagus buat cari angle promosi yang terasa natural."]
+    ],
+    metrics: [
+      ["Komentar ketarik: 52", "Bisa dipakai untuk baca bahasa asli pasar dan pertanyaan yang berulang."],
+      ["Transkrip siap baca", "Isi video cepat dipahami tanpa harus nonton semuanya."]
+    ],
+    stats: [["52", "komentar terbaca"], ["11", "pain point muncul"], ["1 layar", "semua insight"]]
+  }
+};
+
+const scenarioButtons = document.querySelectorAll(".mode-tab");
+const scenarioPanels = document.querySelectorAll(".scenario-panel");
+scenarioButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    scenarioButtons.forEach((item) => item.classList.remove("active"));
+    scenarioPanels.forEach((panel) => panel.classList.remove("active"));
+    button.classList.add("active");
+    const panel = document.querySelector(`[data-panel="${button.dataset.mode}"]`);
+    if (panel) {
+      panel.classList.add("active");
+    }
+  });
+});
+
+const toggleButtons = document.querySelectorAll(".toggle");
+const demoQuery = document.getElementById("demo-query");
+const demoFilters = document.getElementById("demo-filters");
+const demoResults = document.getElementById("demo-results");
+const demoMetrics = document.getElementById("demo-metrics");
+const demoStats = document.getElementById("demo-stats");
+
+function renderDemo(name) {
+  const demo = heroDemos[name];
+  if (!demo) return;
+  demoQuery.value = demo.query;
+  demoFilters.innerHTML = demo.filters.map((item) => `<div class="chip">${item}</div>`).join("");
+  demoResults.innerHTML = demo.results.map(([title, desc]) => `<div class="result-card"><strong>${title}</strong><span>${desc}</span></div>`).join("");
+  demoMetrics.innerHTML = demo.metrics.map(([title, desc], index) => `<div class="metric-card${index === 0 ? " highlight" : ""}"><strong>${title}</strong><span>${desc}</span></div>`).join("");
+  demoStats.innerHTML = demo.stats.map(([value, label]) => `<div class="stat-box"><strong>${value}</strong><span>${label}</span></div>`).join("");
+}
+
+toggleButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    toggleButtons.forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    renderDemo(button.dataset.demo);
+  });
+});
+
+renderDemo("tren");
+</script>
+</body>
+</html>"""
+
+
+APP_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ScrapeFlow - Social Media Intelligence</title>
+<title>Sinyal - Social Search for Indonesia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #09090b;
-  --bg-card: #18181b;
-  --bg-card-hover: #1f1f23;
-  --bg-input: #18181b;
-  --border: #27272a;
-  --border-hover: #3f3f46;
-  --text: #fafafa;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
-  --primary: #6366f1;
-  --primary-hover: #818cf8;
-  --primary-bg: rgba(99,102,241,0.1);
+  --bg: #f3ecdf;
+  --bg-card: rgba(255,255,255,0.78);
+  --bg-card-hover: rgba(255,255,255,0.92);
+  --bg-input: rgba(255,255,255,0.72);
+  --border: rgba(79,49,27,0.12);
+  --border-hover: rgba(79,49,27,0.24);
+  --text: #1f1a17;
+  --text-secondary: #5d5349;
+  --text-muted: #8a7b6d;
+  --primary: #d9481f;
+  --primary-hover: #b53b19;
+  --primary-bg: rgba(217,72,31,0.12);
   --accent-tiktok: #ff0050;
   --accent-youtube: #ff0000;
-  --accent-instagram: #e040fb;
+  --accent-instagram: #d946ef;
   --accent-twitter: #1d9bf0;
   --accent-facebook: #1877f2;
   --success: #22c55e;
-  --radius: 12px;
+  --radius: 18px;
   --radius-sm: 8px;
-  --radius-lg: 16px;
+  --radius-lg: 28px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(217,72,31,0.18), transparent 32%),
+    radial-gradient(circle at top right, rgba(255,178,102,0.28), transparent 28%),
+    linear-gradient(180deg, #fbf6ee 0%, #f3ecdf 52%, #efe4d2 100%);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
 
 /* Subtle grid background */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.03) 1px, transparent 0);
-  background-size: 40px 40px;
+  background-image:
+    linear-gradient(rgba(79,49,27,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,49,27,0.03) 1px, transparent 1px);
+  background-size: 42px 42px;
   pointer-events: none;
   z-index: 0;
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.65), transparent 92%);
 }
 
 .app { position: relative; z-index: 1; }
 
 /* NAV */
 nav {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(79,49,27,0.08);
   padding: 16px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  backdrop-filter: blur(20px);
-  background: rgba(9,9,11,0.8);
+  backdrop-filter: blur(18px);
+  background: rgba(251,246,238,0.7);
   position: sticky;
   top: 0;
   z-index: 100;
 }
 .logo {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
 }
 .logo span { color: var(--primary); }
 .nav-links { display: flex; gap: 4px; }
@@ -233,31 +2240,71 @@ nav {
   border: none;
   background: none;
 }
-.nav-link:hover, .nav-link.active { color: var(--text); background: var(--bg-card); }
+.nav-link:hover, .nav-link.active { color: var(--text); background: rgba(255,255,255,0.72); }
 
 /* HERO */
 .hero {
   text-align: center;
-  padding: 60px 32px 40px;
-  max-width: 700px;
+  padding: 76px 32px 40px;
+  max-width: 920px;
   margin: 0 auto;
 }
+.hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(79,49,27,0.1);
+  background: rgba(255,255,255,0.66);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
 .hero h1 {
-  font-size: 44px;
-  font-weight: 800;
-  letter-spacing: -1.5px;
-  line-height: 1.1;
-  margin-bottom: 16px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 58px;
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  line-height: 1;
+  margin-bottom: 18px;
 }
 .hero h1 .gradient {
-  background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+  background: linear-gradient(135deg, #d9481f, #f97316, #f59e0b);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-.hero p { color: var(--text-secondary); font-size: 17px; line-height: 1.6; max-width: 500px; margin: 0 auto; }
+.hero p {
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1.7;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+.hero-metric {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(79,49,27,0.08);
+  text-align: left;
+}
+.hero-metric strong {
+  display: block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+.hero-metric span { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
 
 /* MAIN CONTAINER */
-.main { max-width: 1000px; margin: 0 auto; padding: 0 32px 60px; }
+.main { max-width: 1120px; margin: 0 auto; padding: 0 32px 72px; }
 
 /* TABS / PAGES */
 .page { display: none; }
@@ -267,6 +2314,8 @@ nav {
 .section {
   background: var(--bg-card);
   border: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(107, 74, 47, 0.08);
   border-radius: var(--radius-lg);
   padding: 28px;
   margin-bottom: 20px;
@@ -306,10 +2355,10 @@ nav {
 
 input[type="text"], input[type="number"], textarea, select {
   width: 100%;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--bg-input);
   color: var(--text);
   font-size: 14px;
   font-family: inherit;
@@ -338,6 +2387,27 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 .chip:hover { border-color: var(--border-hover); }
 .chip.active { border-color: var(--primary); background: var(--primary-bg); color: var(--primary-hover); }
 .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+.quick-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+.quick-pick {
+  border: 1px dashed rgba(79,49,27,0.18);
+  background: rgba(255,255,255,0.55);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.quick-pick:hover {
+  border-color: var(--primary);
+  color: var(--primary-hover);
+  transform: translateY(-1px);
+}
 
 /* INLINE GRID */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -363,9 +2433,10 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   color: white;
   width: 100%;
   justify-content: center;
-  padding: 14px;
+  padding: 16px;
   font-size: 15px;
   border-radius: var(--radius);
+  box-shadow: 0 16px 30px rgba(217,72,31,0.22);
 }
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -380,7 +2451,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 .status-bar {
   padding: 14px 20px;
   border-radius: var(--radius);
-  background: var(--bg-card);
+  background: rgba(255,255,255,0.75);
   border: 1px solid var(--border);
   margin-bottom: 20px;
   display: none;
@@ -407,7 +2478,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   margin-bottom: 20px;
 }
 .stat-card {
-  background: var(--bg-card);
+  background: rgba(255,255,255,0.8);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
@@ -445,7 +2516,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 /* RESULT CARDS */
 .result-list { display: flex; flex-direction: column; gap: 8px; }
 .result-card {
-  background: var(--bg-card);
+  background: rgba(255,255,255,0.82);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px 20px;
@@ -476,17 +2547,181 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 .result-title a { color: var(--text); text-decoration: none; }
 .result-title a:hover { color: var(--primary-hover); }
 .result-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+.result-copy-grid {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+.result-copy-block {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(217,72,31,0.06);
+  border: 1px solid rgba(217,72,31,0.08);
+}
+.result-copy-block.alt {
+  background: rgba(255,255,255,0.78);
+}
+.result-copy-block strong {
+  color: var(--text);
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.result-copy-block p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.result-copy-block.empty p {
+  color: var(--text-muted);
+}
+.result-transcript {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(217,72,31,0.06);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px solid rgba(217,72,31,0.08);
+}
+.result-transcript strong {
+  color: var(--text);
+  display: block;
+  margin-bottom: 4px;
+}
+.result-copy-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.copy-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid rgba(79,49,27,0.08);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 .result-stats {
   display: flex;
   gap: 20px;
   font-size: 12px;
   color: var(--text-secondary);
+  flex-wrap: wrap;
 }
 .result-stats .stat { display: flex; align-items: center; gap: 4px; }
+.badge.sponsored { background: rgba(31,41,55,0.08); color: #5b4633; }
+.badge.analytics { background: rgba(217,72,31,0.12); color: var(--primary); }
+.result-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 20px;
+  align-items: start;
+}
+.profile-main { min-width: 0; }
+.analytics-rail {
+  position: sticky;
+  top: 92px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.analytics-panel {
+  background: rgba(255,255,255,0.88);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 18px;
+  box-shadow: 0 18px 40px rgba(107, 74, 47, 0.08);
+}
+.analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+.analytics-header h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  letter-spacing: -0.04em;
+}
+.analytics-header p {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.analytics-metric {
+  border: 1px solid rgba(79,49,27,0.08);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255,255,255,0.72);
+}
+.analytics-metric strong {
+  display: block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  margin-bottom: 2px;
+}
+.analytics-metric span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.analytics-split {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.analytics-split-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(79,49,27,0.08);
+}
+.analytics-split-row:first-child { border-top: none; padding-top: 0; }
+.analytics-split-row strong {
+  display: block;
+  font-size: 14px;
+}
+.analytics-split-row span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.analytics-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.filter-summary {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
 
 /* COMMENT CARDS */
 .comment-card {
-  background: var(--bg-card);
+  background: rgba(255,255,255,0.8);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 14px 18px;
@@ -495,23 +2730,39 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 .comment-user { font-size: 13px; font-weight: 600; color: var(--primary-hover); margin-bottom: 4px; }
 .comment-text { font-size: 14px; line-height: 1.5; }
 .comment-meta { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+@media (max-width: 800px) {
+  .hero { padding-top: 54px; }
+  .hero h1 { font-size: 42px; }
+  .hero-metrics { grid-template-columns: 1fr; }
+  nav { padding: 14px 20px; }
+  .main { padding: 0 20px 48px; }
+  .profile-shell { grid-template-columns: 1fr; }
+  .analytics-rail { position: static; }
+  .filter-bar { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
 <div class="app">
 
 <nav>
-  <div class="logo">Scrape<span>Flow</span></div>
+  <div class="logo">Sin<span>yal</span></div>
   <div class="nav-links">
-    <button class="nav-link active" onclick="switchPage('search')">Search</button>
-    <button class="nav-link" onclick="switchPage('profile')">Profile</button>
-    <button class="nav-link" onclick="switchPage('comments')">Comments</button>
+    <button class="nav-link active" onclick="switchPage('search', this)">Explore</button>
+    <button class="nav-link" onclick="switchPage('profile', this)">Profiles</button>
+    <button class="nav-link" onclick="switchPage('comments', this)">Comments</button>
   </div>
 </nav>
 
 <div class="hero">
-  <h1>Scrape <span class="gradient">Every Platform</span> in Seconds</h1>
-  <p>Search by keyword across TikTok, YouTube, Instagram, Twitter/X and Facebook. Free, open-source, no API keys.</p>
+  <div class="hero-kicker">Social Search Engine for Indonesia</div>
+  <h1>Cari apa yang lagi <span class="gradient">rame di sosmed</span>.</h1>
+  <p>Satu search box untuk ngelihat sinyal konten dari TikTok, YouTube, Instagram, X, dan Facebook. Cocok buat riset topik, kompetitor, creator, dan campaign lokal.</p>
+  <div class="hero-metrics">
+    <div class="hero-metric"><strong>Riset cepat</strong><span>Masukkan keyword seperti orang pakai Google, terus bandingin hasil lintas platform.</span></div>
+    <div class="hero-metric"><strong>Built for Indo</strong><span>Cocok buat nyari topik lokal, slang, brand, isu, dan niche yang lagi naik.</span></div>
+    <div class="hero-metric"><strong>Actionable</strong><span>Lihat mana yang paling rame, siapa author-nya, dan ekspor hasil buat tim konten.</span></div>
+  </div>
 </div>
 
 <div class="main">
@@ -520,16 +2771,22 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <div class="page active" id="page-search">
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:var(--primary-bg)">Q</div> Search Queries</div>
+    <div class="section-title"><div class="icon" style="background:var(--primary-bg)">S</div> Search Query</div>
     <div class="form-group">
-      <label class="form-label">Keywords</label>
-      <textarea id="keywords" placeholder="Enter keywords, one per line...&#10;resign dari kerja&#10;quit job start business&#10;side hustle"></textarea>
-      <div class="form-hint">Add multiple keywords (one per line) to bulk search across platforms.</div>
+      <label class="form-label">Cari topik, brand, masalah, atau creator</label>
+      <textarea id="keywords" placeholder="Contoh:&#10;skincare viral&#10;kopi susu literan&#10;lowongan kerja remote&#10;openai"></textarea>
+      <div class="form-hint">Bisa isi banyak keyword, satu baris satu query. Cocok buat ngetes beberapa angle sekaligus.</div>
+      <div class="quick-picks">
+        <button class="quick-pick" type="button" onclick="applyExample('skincare viral')">skincare viral</button>
+        <button class="quick-pick" type="button" onclick="applyExample('kopi susu literan')">kopi susu literan</button>
+        <button class="quick-pick" type="button" onclick="applyExample('UMKM fashion lokal')">UMKM fashion lokal</button>
+        <button class="quick-pick" type="button" onclick="applyExample('AI untuk kerja')">AI untuk kerja</button>
+      </div>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(168,85,247,0.1)">P</div> Platforms</div>
+    <div class="section-title"><div class="icon" style="background:rgba(245,158,11,0.14)">P</div> Sources</div>
     <div class="chip-group">
       <div class="chip active" data-platform="tiktok" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-tiktok)"></span>TikTok</div>
       <div class="chip active" data-platform="youtube" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-youtube)"></span>YouTube</div>
@@ -540,11 +2797,11 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   </div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(236,72,153,0.1)">F</div> Filters & Sorting</div>
+    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.14)">F</div> Ranking & Filters</div>
     <div class="grid-3">
       <div class="form-group">
         <label class="form-label">Results per platform</label>
-        <input type="number" id="maxResults" value="5" min="1" max="50">
+        <input type="number" id="maxResults" value="3" min="1" max="50">
       </div>
       <div class="form-group">
         <label class="form-label">Sort by</label>
@@ -556,8 +2813,22 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">&nbsp;</label>
-        <div style="height:42px"></div>
+        <label class="form-label">Date range</label>
+        <select id="searchDateRange">
+          <option value="all">All time</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Min views</label>
+        <input type="number" id="minViews" placeholder="No minimum">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Max views</label>
+        <input type="number" id="maxViews" placeholder="No maximum">
       </div>
     </div>
     <div class="grid-2">
@@ -572,7 +2843,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
     </div>
   </div>
 
-  <button class="btn btn-primary" id="searchBtn" onclick="doSearch()">Start Scraping</button>
+  <button class="btn btn-primary" id="searchBtn" onclick="doSearch()">Cari Sinyal Sosial</button>
 
   <div style="height:24px"></div>
   <div class="status-bar" id="searchStatus"><div class="spinner"></div><span id="searchStatusText"></span></div>
@@ -585,11 +2856,11 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <div class="page" id="page-profile">
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">@</div> TikTok Profile Scraper</div>
+    <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">@</div> TikTok Profile Deep Dive</div>
     <div class="grid-2">
       <div class="form-group">
-        <label class="form-label">Username</label>
-        <input type="text" id="profileUsername" placeholder="@username or username">
+        <label class="form-label">Username TikTok</label>
+        <input type="text" id="profileUsername" placeholder="username saja, tanpa @">
       </div>
       <div class="form-group">
         <label class="form-label">Max videos</label>
@@ -604,22 +2875,55 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
         <option value="oldest">Oldest</option>
       </select>
     </div>
+    <div class="form-group">
+      <label class="form-label">Date range</label>
+      <select id="profileDateRange">
+        <option value="all">All time</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+      </select>
+    </div>
   </div>
 
-  <button class="btn btn-primary" id="profileBtn" onclick="doProfile()">Scrape Profile</button>
+  <button class="btn btn-primary" id="profileBtn" onclick="doProfile()">Buka Profil</button>
 
   <div style="height:24px"></div>
   <div class="status-bar" id="profileStatus"><div class="spinner"></div><span id="profileStatusText"></span></div>
-  <div id="profileStats"></div>
-  <div id="profileDownloads"></div>
-  <div id="profileResults" class="result-list"></div>
+  <div class="profile-shell">
+    <div class="profile-main">
+      <div id="profileStats"></div>
+      <div id="profileDownloads"></div>
+      <div class="section">
+        <div class="section-title"><div class="icon" style="background:rgba(217,72,31,0.12)">F</div> Feed Analytics</div>
+        <div class="filter-summary" id="profileFilterSummary">Load a profile to compare organic vs sponsored posts and search inside the feed.</div>
+        <div class="filter-bar">
+          <input type="text" id="profileFeedSearch" placeholder="Search post titles or captions..." oninput="applyProfileFilters()">
+          <select id="profileSponsoredFilter" onchange="applyProfileFilters()">
+            <option value="all">All posts</option>
+            <option value="organic">Organic only</option>
+            <option value="sponsored">Sponsored only</option>
+          </select>
+        </div>
+        <div id="profileResults" class="result-list"></div>
+      </div>
+    </div>
+    <aside class="analytics-rail">
+      <div id="profileAnalytics" class="analytics-panel">
+        <div class="analytics-header">
+          <h3>Profile metrics</h3>
+          <p>side rail</p>
+        </div>
+        <div class="analytics-empty">Belum ada data. Buka satu profil TikTok dulu untuk lihat engagement rate, average metrics, dan split organic vs sponsored.</div>
+      </div>
+    </aside>
+  </div>
 </div>
 
 <!-- ==================== COMMENTS PAGE ==================== -->
 <div class="page" id="page-comments">
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">C</div> TikTok Comments Scraper</div>
+    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">C</div> TikTok Comment Readout</div>
     <div class="grid-2">
       <div class="form-group">
         <label class="form-label">Video URL</label>
@@ -632,7 +2936,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
     </div>
   </div>
 
-  <button class="btn btn-primary" id="commentBtn" onclick="doComments()">Scrape Comments</button>
+  <button class="btn btn-primary" id="commentBtn" onclick="doComments()">Ambil Komentar</button>
 
   <div style="height:24px"></div>
   <div class="status-bar" id="commentStatus"><div class="spinner"></div><span id="commentStatusText"></span></div>
@@ -643,20 +2947,59 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 </div><!-- .app -->
 
 <script>
-function switchPage(name) {
+function switchPage(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  event.target.classList.add('active');
+  el.classList.add('active');
 }
 
 function toggleChip(el) { el.classList.toggle('active'); }
+function applyExample(value) { document.getElementById('keywords').value = value; }
+let profileResultsState = [];
+const SPONSORED_TERMS = ['#ad', '#sponsored', 'sponsored', 'paid partnership', 'affiliate', 'kerjasama', 'promo', 'diskon', 'voucher'];
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function fmt(n) {
   if (n == null) return '\u2014';
   if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
   return n.toLocaleString();
+}
+function pct(n) {
+  if (n == null || Number.isNaN(n)) return '\u2014';
+  return n.toFixed(2) + '%';
+}
+function avg(results, key) {
+  const values = results.map(r => Number(r[key]) || 0).filter(v => v > 0);
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+function engagementRate(result) {
+  const views = Number(result.views) || 0;
+  if (!views) return null;
+  const interactions = (Number(result.likes) || 0) + (Number(result.comments) || 0) + (Number(result.shares) || 0);
+  return (interactions / views) * 100;
+}
+function isSponsoredPost(result) {
+  const haystack = `${result.title || ''} ${result.description || ''} ${result.caption || ''} ${result.transcript || ''}`.toLowerCase();
+  return SPONSORED_TERMS.some(term => haystack.includes(term));
+}
+function profileBadge(result) {
+  const er = engagementRate(result);
+  const sponsored = isSponsoredPost(result);
+  return {
+    er,
+    sponsored,
+  };
 }
 
 function showStatus(id, text) {
@@ -677,6 +3020,27 @@ function hideStatus(id, text) {
   if (sp) sp.remove();
 }
 
+function renderCopyBlocks(r) {
+  const title = escapeHtml(r.title || r.video_url || '');
+  const hook = escapeHtml(r.hook || r.title || r.caption || r.description || 'Belum ada hook yang bisa diringkas.');
+  const content = escapeHtml(r.content || r.description || r.caption || 'Belum ada isi yang bisa dibaca dari hasil ini.');
+  const caption = escapeHtml(r.caption || r.description || 'Belum ada caption yang kebaca.');
+  const transcript = escapeHtml(r.transcript || '');
+  const transcriptLabel = r.transcript_source === 'spoken_text' ? 'Transcript video' : 'Transcript video';
+  const transcriptBlock = transcript
+    ? `<div class="result-copy-block"><div class="result-copy-meta"><span class="copy-chip">${transcriptLabel}</span></div><strong>Transcript</strong><p>${transcript}</p></div>`
+    : `<div class="result-copy-block empty"><strong>Transcript</strong><p>Belum ada transcript suara yang berhasil dibaca. Untuk platform ini, data yang ada baru caption atau deskripsi video.</p></div>`;
+
+  return `
+    <div class="result-copy-grid">
+      <div class="result-copy-block alt"><strong>Hook</strong><p>${hook}</p></div>
+      <div class="result-copy-block alt"><strong>Isi</strong><p>${content}</p></div>
+      <div class="result-copy-block alt"><strong>Caption</strong><p>${caption}</p></div>
+      ${transcriptBlock}
+    </div>
+  `;
+}
+
 function renderCards(containerId, results) {
   document.getElementById(containerId).innerHTML = results.map(r => `
     <div class="result-card">
@@ -684,8 +3048,9 @@ function renderCards(containerId, results) {
         <span class="badge ${r.platform}">${r.platform}</span>
         <span style="font-size:12px;color:var(--text-muted)">${r.duration ? r.duration + 's' : ''}</span>
       </div>
-      <div class="result-title"><a href="${r.video_url}" target="_blank">${r.title || r.description?.slice(0,120) || r.video_url}</a></div>
-      <div class="result-meta">@${r.author || 'unknown'}${r.music ? ' &middot; ' + r.music : ''}</div>
+      <div class="result-title"><a href="${escapeHtml(r.video_url)}" target="_blank">${escapeHtml(r.title || r.description?.slice(0,120) || r.video_url)}</a></div>
+      <div class="result-meta">@${escapeHtml(r.author || 'unknown')}${r.music ? ' &middot; ' + escapeHtml(r.music) : ''}</div>
+      ${renderCopyBlocks(r)}
       <div class="result-stats">
         <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> ${fmt(r.views)}</span>
         <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> ${fmt(r.likes)}</span>
@@ -695,6 +3060,33 @@ function renderCards(containerId, results) {
       </div>
     </div>
   `).join('');
+}
+
+function renderProfileCards(containerId, results) {
+  document.getElementById(containerId).innerHTML = results.map(r => {
+    const badge = profileBadge(r);
+    return `
+    <div class="result-card">
+      <div class="result-top">
+        <div class="result-badges">
+          <span class="badge ${r.platform}">${r.platform}</span>
+          <span class="badge analytics">${pct(badge.er)} ER</span>
+          ${badge.sponsored ? '<span class="badge sponsored">Sponsored</span>' : '<span class="badge sponsored">Organic</span>'}
+        </div>
+        <span style="font-size:12px;color:var(--text-muted)">${r.duration ? r.duration + 's' : ''}</span>
+      </div>
+      <div class="result-title"><a href="${escapeHtml(r.video_url)}" target="_blank">${escapeHtml(r.title || r.description?.slice(0,120) || r.video_url)}</a></div>
+      <div class="result-meta">@${escapeHtml(r.author || 'unknown')}${r.music ? ' &middot; ' + escapeHtml(r.music) : ''}</div>
+      ${renderCopyBlocks(r)}
+      <div class="result-stats">
+        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> ${fmt(r.views)}</span>
+        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> ${fmt(r.likes)}</span>
+        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ${fmt(r.comments)}</span>
+        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> ${fmt(r.shares)}</span>
+      </div>
+    </div>
+  `;
+  }).join('') || '<p style="color:var(--text-muted);padding:6px 2px">No posts match this filter.</p>';
 }
 
 function renderStats(containerId, results) {
@@ -728,6 +3120,60 @@ function renderDownloads(containerId, json_file, csv_file) {
     </div>`;
 }
 
+function renderProfileAnalytics(results) {
+  const sponsored = results.filter(isSponsoredPost);
+  const organic = results.filter(r => !isSponsoredPost(r));
+  const avgEngagement = avg(results.map(r => ({ value: engagementRate(r) })), 'value');
+  const panel = document.getElementById('profileAnalytics');
+  panel.innerHTML = `
+    <div class="analytics-header">
+      <h3>Profile metrics</h3>
+      <p>${results.length} posts sampled</p>
+    </div>
+    <div class="analytics-grid">
+      <div class="analytics-metric"><strong>${pct(avgEngagement)}</strong><span>Avg engagement rate</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'views'))}</strong><span>Avg views</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'likes'))}</strong><span>Avg likes</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'comments'))}</strong><span>Avg comments</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'shares'))}</strong><span>Avg shares</span></div>
+      <div class="analytics-metric"><strong>${fmt(sponsored.length)}</strong><span>Sponsored posts detected</span></div>
+    </div>
+    <div style="height:16px"></div>
+    <div class="analytics-header">
+      <h3>Content split</h3>
+      <p>Organic vs sponsored</p>
+    </div>
+    <div class="analytics-split">
+      <div class="analytics-split-row">
+        <div><strong>Organic</strong><span>${organic.length} posts</span></div>
+        <div style="text-align:right"><strong>${pct(avg(organic.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>avg ER</span></div>
+      </div>
+      <div class="analytics-split-row">
+        <div><strong>Sponsored</strong><span>${sponsored.length} posts</span></div>
+        <div style="text-align:right"><strong>${pct(avg(sponsored.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>avg ER</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function applyProfileFilters() {
+  const query = document.getElementById('profileFeedSearch').value.trim().toLowerCase();
+  const sponsoredFilter = document.getElementById('profileSponsoredFilter').value;
+  const filtered = profileResultsState.filter(result => {
+    const haystack = `${result.title || ''} ${result.description || ''} ${result.caption || ''} ${result.hook || ''} ${result.content || ''} ${result.transcript || ''}`.toLowerCase();
+    const sponsored = isSponsoredPost(result);
+    const matchesQuery = !query || haystack.includes(query);
+    const matchesSponsored =
+      sponsoredFilter === 'all' ||
+      (sponsoredFilter === 'sponsored' && sponsored) ||
+      (sponsoredFilter === 'organic' && !sponsored);
+    return matchesQuery && matchesSponsored;
+  });
+  document.getElementById('profileFilterSummary').textContent =
+    `${filtered.length} dari ${profileResultsState.length} post tampil. Gunakan rail kanan buat benchmark cepat sebelum buka video satu-satu.`;
+  renderProfileCards('profileResults', filtered);
+}
+
 /* ========== SEARCH ========== */
 async function doSearch() {
   const raw = document.getElementById('keywords').value.trim();
@@ -736,20 +3182,25 @@ async function doSearch() {
   if (!platforms.length) { alert('Select at least one platform'); return; }
 
   const btn = document.getElementById('searchBtn');
-  btn.disabled = true; btn.textContent = 'Scraping...';
+  btn.disabled = true; btn.textContent = 'Lagi cari...';
 
   const params = new URLSearchParams({
     q: raw,
     platforms: platforms.join(','),
     max: document.getElementById('maxResults').value || 5,
     sort: document.getElementById('sortBy').value,
+    date_range: document.getElementById('searchDateRange').value,
   });
+  const minV = document.getElementById('minViews').value;
+  const maxV = document.getElementById('maxViews').value;
   const minL = document.getElementById('minLikes').value;
   const maxL = document.getElementById('maxLikes').value;
+  if (minV) params.set('min_views', minV);
+  if (maxV) params.set('max_views', maxV);
   if (minL) params.set('min_likes', minL);
   if (maxL) params.set('max_likes', maxL);
 
-  showStatus('searchStatus', 'Scraping across ' + platforms.join(', ') + '...');
+  showStatus('searchStatus', 'Lagi ngumpulin sinyal dari ' + platforms.join(', ') + '...');
   document.getElementById('searchStats').innerHTML = '';
   document.getElementById('searchDownloads').innerHTML = '';
   document.getElementById('searchResults').innerHTML = '';
@@ -758,45 +3209,50 @@ async function doSearch() {
     const resp = await fetch('/api/search?' + params);
     const data = await resp.json();
     if (data.error) { hideStatus('searchStatus', 'Error: ' + data.error); return; }
-    hideStatus('searchStatus', `Done! ${data.total} results in ${data.elapsed}`);
+    hideStatus('searchStatus', `Keluar ${data.total} hasil dalam ${data.elapsed}`);
     renderStats('searchStats', data.results);
     renderDownloads('searchDownloads', data.json_file, data.csv_file);
     renderCards('searchResults', data.results);
   } catch(e) {
     hideStatus('searchStatus', 'Error: ' + e.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Start Scraping';
+    btn.disabled = false; btn.textContent = 'Cari Sinyal Sosial';
   }
 }
 
 /* ========== PROFILE ========== */
 async function doProfile() {
-  const username = document.getElementById('profileUsername').value.trim();
+  const username = document.getElementById('profileUsername').value.trim().replace(/^@+/, '');
   if (!username) return;
 
   const btn = document.getElementById('profileBtn');
-  btn.disabled = true; btn.textContent = 'Scraping...';
-  showStatus('profileStatus', `Scraping @${username}...`);
+  btn.disabled = true; btn.textContent = 'Lagi buka...';
+  showStatus('profileStatus', `Lagi buka ${username}...`);
   document.getElementById('profileStats').innerHTML = '';
   document.getElementById('profileDownloads').innerHTML = '';
   document.getElementById('profileResults').innerHTML = '';
+  document.getElementById('profileFeedSearch').value = '';
+  document.getElementById('profileSponsoredFilter').value = 'all';
 
   try {
     const params = new URLSearchParams({
       username,
       max: document.getElementById('profileMax').value || 10,
       sort: document.getElementById('profileSort').value,
+      date_range: document.getElementById('profileDateRange').value,
     });
     const resp = await fetch('/api/profile?' + params);
     const data = await resp.json();
-    hideStatus('profileStatus', `Done! ${data.total} videos in ${data.elapsed}`);
+    hideStatus('profileStatus', `Ketemu ${data.total} video dalam ${data.elapsed}`);
     renderStats('profileStats', data.results);
     renderDownloads('profileDownloads', data.json_file, data.csv_file);
-    renderCards('profileResults', data.results);
+    profileResultsState = data.results || [];
+    renderProfileAnalytics(profileResultsState);
+    applyProfileFilters();
   } catch(e) {
     hideStatus('profileStatus', 'Error: ' + e.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Scrape Profile';
+    btn.disabled = false; btn.textContent = 'Buka Profil';
   }
 }
 
@@ -806,8 +3262,8 @@ async function doComments() {
   if (!url) return;
 
   const btn = document.getElementById('commentBtn');
-  btn.disabled = true; btn.textContent = 'Scraping...';
-  showStatus('commentStatus', 'Extracting comments...');
+  btn.disabled = true; btn.textContent = 'Lagi ambil...';
+  showStatus('commentStatus', 'Lagi ekstrak komentar...');
   document.getElementById('commentResults').innerHTML = '';
 
   try {
@@ -817,7 +3273,11 @@ async function doComments() {
     });
     const resp = await fetch('/api/comments?' + params);
     const data = await resp.json();
-    hideStatus('commentStatus', `Done! ${data.total} comments extracted`);
+    const totalOnVideo = data.video_comment_count;
+    const statusText = totalOnVideo != null
+      ? `Terekstrak ${data.total} komentar dari ${totalOnVideo} komentar yang terdeteksi di video`
+      : `Ketemu ${data.total} komentar`;
+    hideStatus('commentStatus', statusText);
 
     document.getElementById('commentResults').innerHTML = data.comments.map(c => `
       <div class="comment-card">
@@ -825,11 +3285,11 @@ async function doComments() {
         <div class="comment-text">${c.text}</div>
         <div class="comment-meta">${c.likes ? c.likes + ' likes' : ''} ${c.replies ? '&middot; ' + c.replies + ' replies' : ''}</div>
       </div>
-    `).join('') || '<p style="color:var(--text-muted);padding:20px">No comments found in page data. TikTok may load comments dynamically after scrolling.</p>';
+    `).join('') || `<p style="color:var(--text-muted);padding:20px">${totalOnVideo ? `Video ini terdeteksi punya ${totalOnVideo} komentar, tapi TikTok belum memuat isi komentarnya ke page payload saat scrape berjalan.` : 'No comments found in page data. TikTok may load comments dynamically after scrolling.'}</p>`;
   } catch(e) {
     hideStatus('commentStatus', 'Error: ' + e.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Scrape Comments';
+    btn.disabled = false; btn.textContent = 'Ambil Komentar';
   }
 }
 </script>

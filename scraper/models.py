@@ -12,6 +12,9 @@ class VideoResult:
     keyword: str
     video_url: str
     title: str = ""
+    hook: str = ""
+    content: str = ""
+    caption: str = ""
     description: str = ""
     author: str = ""
     author_url: str = ""
@@ -24,6 +27,8 @@ class VideoResult:
     upload_date: str = ""
     thumbnail: str = ""
     music: str = ""
+    transcript: str = ""
+    transcript_source: str = ""
     hashtags: list = field(default_factory=list)
 
     def to_dict(self):
