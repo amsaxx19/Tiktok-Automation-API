@@ -3052,6 +3052,71 @@ nav {
 
 /* MAIN CONTAINER */
 .main { max-width: 1120px; margin: 0 auto; padding: 0 32px 72px; }
+.account-strip {
+  max-width: 1120px;
+  margin: -10px auto 22px;
+  padding: 0 32px;
+}
+.account-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  background: rgba(255,255,255,0.82);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: 0 18px 40px rgba(107, 74, 47, 0.08);
+}
+.account-copy strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+.account-copy p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.usage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.usage-chip {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(217,72,31,0.08);
+  border: 1px solid rgba(217,72,31,0.12);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.usage-chip strong {
+  color: var(--primary-hover);
+  margin-right: 6px;
+}
+.banner-inline {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(217,72,31,0.12);
+  background: rgba(217,72,31,0.08);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.banner-inline strong {
+  color: var(--text);
+}
+.hidden { display: none !important; }
 
 /* TABS / PAGES */
 .page { display: none; }
@@ -3483,6 +3548,9 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   .hero-metrics { grid-template-columns: 1fr; }
   nav { padding: 14px 20px; }
   .main { padding: 0 20px 48px; }
+  .account-strip { padding: 0 20px; }
+  .account-panel { grid-template-columns: 1fr; }
+  .account-actions { justify-content: flex-start; }
   .profile-shell { grid-template-columns: 1fr; }
   .analytics-rail { position: static; }
   .filter-bar { grid-template-columns: 1fr; }
@@ -3512,10 +3580,22 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   </div>
 </div>
 
+<div class="account-strip">
+  <div class="account-panel" id="accountPanel">
+    <div class="account-copy">
+      <strong id="accountTitle">Sedang cek status akun...</strong>
+      <p id="accountBody">Begitu session dan paket kebaca, status billing dan sisa kuota bakal muncul di sini.</p>
+      <div class="usage-chips" id="usageChips"></div>
+    </div>
+    <div class="account-actions" id="accountActions"></div>
+  </div>
+</div>
+
 <div class="main">
 
 <!-- ==================== SEARCH PAGE ==================== -->
 <div class="page active" id="page-search">
+  <div class="banner-inline hidden" id="searchBanner"></div>
 
   <div class="section">
     <div class="section-title"><div class="icon" style="background:var(--primary-bg)">S</div> Search Query</div>
@@ -3601,6 +3681,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 
 <!-- ==================== PROFILE PAGE ==================== -->
 <div class="page" id="page-profile">
+  <div class="banner-inline hidden" id="profileBanner"></div>
 
   <div class="section">
     <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">@</div> TikTok Profile Deep Dive</div>
@@ -3668,6 +3749,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 
 <!-- ==================== COMMENTS PAGE ==================== -->
 <div class="page" id="page-comments">
+  <div class="banner-inline hidden" id="commentBanner"></div>
 
   <div class="section">
     <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">C</div> TikTok Comment Readout</div>
@@ -3704,6 +3786,8 @@ function switchPage(name, el) {
 function toggleChip(el) { el.classList.toggle('active'); }
 function applyExample(value) { document.getElementById('keywords').value = value; }
 let profileResultsState = [];
+let sessionState = null;
+let usageState = null;
 const SPONSORED_TERMS = ['#ad', '#sponsored', 'sponsored', 'paid partnership', 'affiliate', 'kerjasama', 'promo', 'diskon', 'voucher'];
 
 function escapeHtml(value) {
@@ -3765,6 +3849,91 @@ function hideStatus(id, text) {
   if (text) bar.querySelector('span').textContent = text;
   const sp = bar.querySelector('.spinner');
   if (sp) sp.remove();
+}
+function setBanner(id, html = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!html) {
+    el.innerHTML = '';
+    el.classList.add('hidden');
+    return;
+  }
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+function renderAccountPanel() {
+  const title = document.getElementById('accountTitle');
+  const body = document.getElementById('accountBody');
+  const chips = document.getElementById('usageChips');
+  const actions = document.getElementById('accountActions');
+
+  if (!sessionState || !sessionState.configured) {
+    title.textContent = 'Mode lokal aktif';
+    body.textContent = 'Auth Supabase belum aktif di environment ini. App masih bisa dipakai untuk development tanpa billing guard.';
+    chips.innerHTML = '<div class="usage-chip"><strong>Dev</strong> Auth off</div>';
+    actions.innerHTML = '<a class="btn btn-secondary" href="/">Lihat landing</a>';
+    return;
+  }
+
+  if (!sessionState.authenticated) {
+    title.textContent = 'Belum login';
+    body.textContent = 'Masuk dulu untuk buka fitur search, profile, dan comments. Setelah itu paket aktif dan kuota akan kebaca otomatis.';
+    chips.innerHTML = '';
+    actions.innerHTML = '<a class="btn btn-secondary" href="/signin">Masuk</a><a class="btn btn-primary" href="/signup">Daftar</a>';
+    return;
+  }
+
+  const userEmail = sessionState.user?.email || 'akun aktif';
+  const plan = usageState?.plan || sessionState.plan;
+  const subscription = usageState?.subscription || sessionState.subscription;
+  const active = subscription && subscription.status === 'active';
+
+  title.textContent = active ? `Login sebagai ${userEmail}` : `Akun ${userEmail} belum punya paket aktif`;
+  body.textContent = active
+    ? `Paket ${plan?.name || plan?.code || subscription?.plan_code || '-'} aktif. Sisa kuota bulan ini langsung dipantau dari backend.`
+    : 'Pilih paket dulu untuk buka semua fitur. Begitu pembayaran masuk, akses akan aktif otomatis tanpa setup manual.';
+
+  const usage = usageState?.usage || {};
+  chips.innerHTML = active ? `
+    <div class="usage-chip"><strong>Search</strong>${usage.search || 0} / ${plan?.monthly_search_limit || 0}</div>
+    <div class="usage-chip"><strong>Profile</strong>${usage.profile || 0} / ${plan?.monthly_profile_limit || 0}</div>
+    <div class="usage-chip"><strong>Comments</strong>${usage.comments || 0} / ${plan?.monthly_comment_limit || 0}</div>
+    <div class="usage-chip"><strong>Transcript</strong>${usage.transcript || 0} / ${plan?.monthly_transcript_limit || 0}</div>
+  ` : '<div class="usage-chip"><strong>Status</strong>Belum aktif</div>';
+
+  actions.innerHTML = active
+    ? '<a class="btn btn-secondary" href="/payment">Kelola paket</a><button class="btn btn-secondary" type="button" onclick="doSignout()">Keluar</button>'
+    : '<a class="btn btn-primary" href="/payment">Pilih paket</a><button class="btn btn-secondary" type="button" onclick="doSignout()">Keluar</button>';
+}
+
+async function refreshAccountState() {
+  try {
+    const sessionResp = await fetch('/api/auth/session');
+    sessionState = await sessionResp.json();
+    usageState = null;
+    if (sessionState?.authenticated) {
+      const usageResp = await fetch('/api/account/usage');
+      if (usageResp.ok) usageState = await usageResp.json();
+    }
+  } catch (e) {
+    sessionState = { configured: false };
+  }
+  renderAccountPanel();
+}
+
+async function doSignout() {
+  await fetch('/api/auth/signout', { method: 'POST' });
+  window.location.href = '/signin';
+}
+
+function handleApiFailure(data, fallbackMessage, bannerId) {
+  const message = data?.error || fallbackMessage;
+  if (bannerId) {
+    const cta = data?.upgrade_url ? ` <a href="${data.upgrade_url}">Buka paket</a>` : '';
+    setBanner(bannerId, `<strong>${escapeHtml(message)}</strong>${cta}`);
+  }
+  return message;
 }
 
 function renderCopyBlocks(r) {
@@ -3951,15 +4120,21 @@ async function doSearch() {
   document.getElementById('searchStats').innerHTML = '';
   document.getElementById('searchDownloads').innerHTML = '';
   document.getElementById('searchResults').innerHTML = '';
+  setBanner('searchBanner');
 
   try {
     const resp = await fetch('/api/search?' + params);
     const data = await resp.json();
-    if (data.error) { hideStatus('searchStatus', 'Error: ' + data.error); return; }
+    if (!resp.ok || data.error) {
+      hideStatus('searchStatus', 'Error: ' + handleApiFailure(data, 'Search gagal dijalankan.', 'searchBanner'));
+      if (resp.status === 401) setTimeout(() => window.location.href = '/signin', 700);
+      return;
+    }
     hideStatus('searchStatus', `Keluar ${data.total} hasil dalam ${data.elapsed}`);
     renderStats('searchStats', data.results);
     renderDownloads('searchDownloads', data.json_file, data.csv_file);
     renderCards('searchResults', data.results);
+    await refreshAccountState();
   } catch(e) {
     hideStatus('searchStatus', 'Error: ' + e.message);
   } finally {
@@ -3980,6 +4155,7 @@ async function doProfile() {
   document.getElementById('profileResults').innerHTML = '';
   document.getElementById('profileFeedSearch').value = '';
   document.getElementById('profileSponsoredFilter').value = 'all';
+  setBanner('profileBanner');
 
   try {
     const params = new URLSearchParams({
@@ -3990,12 +4166,18 @@ async function doProfile() {
     });
     const resp = await fetch('/api/profile?' + params);
     const data = await resp.json();
+    if (!resp.ok || data.error) {
+      hideStatus('profileStatus', 'Error: ' + handleApiFailure(data, 'Profile gagal dibuka.', 'profileBanner'));
+      if (resp.status === 401) setTimeout(() => window.location.href = '/signin', 700);
+      return;
+    }
     hideStatus('profileStatus', `Ketemu ${data.total} video dalam ${data.elapsed}`);
     renderStats('profileStats', data.results);
     renderDownloads('profileDownloads', data.json_file, data.csv_file);
     profileResultsState = data.results || [];
     renderProfileAnalytics(profileResultsState);
     applyProfileFilters();
+    await refreshAccountState();
   } catch(e) {
     hideStatus('profileStatus', 'Error: ' + e.message);
   } finally {
@@ -4012,6 +4194,7 @@ async function doComments() {
   btn.disabled = true; btn.textContent = 'Lagi ambil...';
   showStatus('commentStatus', 'Lagi ekstrak komentar...');
   document.getElementById('commentResults').innerHTML = '';
+  setBanner('commentBanner');
 
   try {
     const params = new URLSearchParams({
@@ -4020,6 +4203,11 @@ async function doComments() {
     });
     const resp = await fetch('/api/comments?' + params);
     const data = await resp.json();
+    if (!resp.ok || data.error) {
+      hideStatus('commentStatus', 'Error: ' + handleApiFailure(data, 'Komentar gagal diambil.', 'commentBanner'));
+      if (resp.status === 401) setTimeout(() => window.location.href = '/signin', 700);
+      return;
+    }
     const totalOnVideo = data.video_comment_count;
     const statusText = totalOnVideo != null
       ? `Terekstrak ${data.total} komentar dari ${totalOnVideo} komentar yang terdeteksi di video`
@@ -4033,12 +4221,15 @@ async function doComments() {
         <div class="comment-meta">${c.likes ? c.likes + ' likes' : ''} ${c.replies ? '&middot; ' + c.replies + ' replies' : ''}</div>
       </div>
     `).join('') || `<p style="color:var(--text-muted);padding:20px">${totalOnVideo ? `Video ini terdeteksi punya ${totalOnVideo} komentar, tapi TikTok belum memuat isi komentarnya ke page payload saat scrape berjalan.` : 'No comments found in page data. TikTok may load comments dynamically after scrolling.'}</p>`;
+    await refreshAccountState();
   } catch(e) {
     hideStatus('commentStatus', 'Error: ' + e.message);
   } finally {
     btn.disabled = false; btn.textContent = 'Ambil Komentar';
   }
 }
+
+refreshAccountState();
 </script>
 </body>
 </html>"""
