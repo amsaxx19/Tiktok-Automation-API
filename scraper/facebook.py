@@ -107,7 +107,14 @@ class FacebookScraper(BaseScraper):
         result.description = meta.get("og:description", "")
         result.thumbnail = meta.get("og:image", "")
 
-        # Try to extract author from og:title or URL
+        # Prefer page identity from metadata. Reel/watch path segments are not authors.
+        if not result.author:
+            for key in ("og:site_name", "twitter:title"):
+                candidate = (meta.get(key) or "").strip()
+                if candidate and candidate.lower() not in self.GENERIC_AUTHOR_SEGMENTS:
+                    result.author = candidate
+                    break
+
         if not result.author:
             url_match = re.search(r"facebook\.com/([^/]+)/", result.video_url)
             if url_match:

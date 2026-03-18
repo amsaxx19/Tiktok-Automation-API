@@ -194,6 +194,10 @@ def supabase_auth_configured() -> bool:
     return bool(SUPABASE_URL and SUPABASE_ANON_KEY)
 
 
+def supabase_rest_configured() -> bool:
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+
+
 def supabase_headers(api_key: str | None = None) -> dict[str, str]:
     key = api_key or SUPABASE_ANON_KEY
     return {
@@ -261,6 +265,319 @@ async def get_authenticated_user(request: Request) -> dict | None:
         "email": data.get("email") or jwt_payload.get("email"),
         "raw": data,
     }
+
+
+async def supabase_rest_request(
+    method: str,
+    path: str,
+    *,
+    params: dict | None = None,
+    payload: dict | list | None = None,
+    prefer: str | None = None,
+):
+    if not supabase_rest_configured():
+        return 503, {"error": "Supabase database belum dikonfigurasi di environment."}, {}
+
+    headers = supabase_headers(SUPABASE_SERVICE_ROLE_KEY)
+    if prefer:
+        headers["Prefer"] = prefer
+
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.request(
+            method,
+            f"{SUPABASE_URL}{path}",
+            headers=headers,
+            params=params,
+            json=payload,
+        )
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"error": response.text}
+    return response.status_code, data, response.headers
+
+
+def parse_epoch_millis(value) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        timestamp = int(value)
+    except (TypeError, ValueError):
+        return None
+    if timestamp > 10_000_000_000:
+        timestamp = timestamp / 1000
+    try:
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def infer_plan_code(product_name: str, amount: int) -> str | None:
+    normalized_name = normalize_text(product_name).lower()
+    for code, plan in PLAN_CATALOG.items():
+        if normalized_name and (
+            code in normalized_name
+            or normalize_text(plan["name"]).lower() in normalized_name
+        ):
+            return code
+    for code, plan in PLAN_CATALOG.items():
+        if amount == plan["price_idr"]:
+            return code
+    return None
+
+
+def billing_period_end(start_at: datetime | None, plan_code: str | None) -> datetime | None:
+    if not start_at or not plan_code:
+        return None
+    billing_interval = "monthly"
+    if plan_code in PLAN_CATALOG:
+        billing_interval = "yearly" if PLAN_CATALOG[plan_code].get("billing_interval") == "yearly" else "monthly"
+    if billing_interval == "yearly":
+        return start_at + timedelta(days=365)
+    return start_at + timedelta(days=30)
+
+
+async def fetch_profile_by_email(email: str) -> dict | None:
+    status_code, data, _ = await supabase_rest_request(
+        "GET",
+        "/rest/v1/profiles",
+        params={
+            "select": "user_id,email,full_name,company_name,phone,role,onboarding_use_case",
+            "email": f"eq.{email}",
+            "limit": "1",
+        },
+    )
+    if status_code != 200 or not isinstance(data, list) or not data:
+        return None
+    return data[0]
+
+
+async def fetch_plan_row(plan_code: str) -> dict | None:
+    status_code, data, _ = await supabase_rest_request(
+        "GET",
+        "/rest/v1/plans",
+        params={
+            "select": "*",
+            "code": f"eq.{plan_code}",
+            "limit": "1",
+        },
+    )
+    if status_code != 200 or not isinstance(data, list) or not data:
+        return None
+    return data[0]
+
+
+async def fetch_latest_subscription(user_id: str) -> dict | None:
+    status_code, data, _ = await supabase_rest_request(
+        "GET",
+        "/rest/v1/subscriptions",
+        params={
+            "select": "*",
+            "user_id": f"eq.{user_id}",
+            "order": "created_at.desc",
+            "limit": "1",
+        },
+    )
+    if status_code != 200 or not isinstance(data, list) or not data:
+        return None
+    return data[0]
+
+
+async def fetch_current_subscription(user_id: str) -> tuple[dict | None, dict | None]:
+    subscription = await fetch_latest_subscription(user_id)
+    if not subscription:
+        return None, None
+    plan = await fetch_plan_row(subscription.get("plan_code"))
+    return subscription, plan
+
+
+def subscription_is_active(subscription: dict | None) -> bool:
+    if not subscription:
+        return False
+    if subscription.get("status") != "active":
+        return False
+    current_period_end = parse_upload_date(subscription.get("current_period_end"))
+    if current_period_end and current_period_end < datetime.now(timezone.utc):
+        return False
+    return True
+
+
+def usage_period_start(subscription: dict | None) -> datetime:
+    if subscription:
+        start = parse_upload_date(subscription.get("current_period_start"))
+        if start:
+            return start
+    now = datetime.now(timezone.utc)
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+async def get_usage_total(user_id: str, event_type: str, since: datetime) -> int:
+    status_code, data, _ = await supabase_rest_request(
+        "GET",
+        "/rest/v1/usage_events",
+        params={
+            "select": "units",
+            "user_id": f"eq.{user_id}",
+            "event_type": f"eq.{event_type}",
+            "created_at": f"gte.{since.isoformat()}",
+            "limit": "1000",
+        },
+    )
+    if status_code != 200 or not isinstance(data, list):
+        return 0
+    return sum(int(item.get("units") or 0) for item in data)
+
+
+async def record_usage_event(user_id: str, event_type: str, metadata: dict | None = None, units: int = 1):
+    await supabase_rest_request(
+        "POST",
+        "/rest/v1/usage_events",
+        payload={
+            "user_id": user_id,
+            "event_type": event_type,
+            "units": units,
+            "metadata": metadata or {},
+        },
+        prefer="return=minimal",
+    )
+
+
+async def enforce_feature_access(request: Request, feature: str) -> tuple[dict | None, dict | None, JSONResponse | None]:
+    if not supabase_auth_configured():
+        return None, None, None
+
+    user = await get_authenticated_user(request)
+    if not user:
+        return None, None, JSONResponse(
+            {"error": "Silakan login dulu untuk memakai fitur ini.", "code": "auth_required"},
+            status_code=401,
+        )
+
+    if not supabase_rest_configured():
+        return user, None, None
+
+    subscription, plan = await fetch_current_subscription(user["id"])
+    if not subscription_is_active(subscription) or not plan:
+        return user, None, JSONResponse(
+            {
+                "error": "Paket aktif belum ditemukan. Pilih paket dulu untuk lanjut pakai aplikasi.",
+                "code": "subscription_required",
+                "upgrade_url": "/payment",
+            },
+            status_code=402,
+        )
+
+    limit_map = {
+        "search": "monthly_search_limit",
+        "profile": "monthly_profile_limit",
+        "comments": "monthly_comment_limit",
+        "transcript": "monthly_transcript_limit",
+    }
+    limit_field = limit_map.get(feature)
+    if not limit_field:
+        return user, plan, None
+
+    limit_value = int(plan.get(limit_field) or 0)
+    if limit_value <= 0:
+        return user, plan, None
+
+    used = await get_usage_total(user["id"], feature, usage_period_start(subscription))
+    if used >= limit_value:
+        return user, plan, JSONResponse(
+            {
+                "error": "Kuota paket bulan ini sudah habis.",
+                "code": "quota_exceeded",
+                "feature": feature,
+                "limit": limit_value,
+                "used": used,
+                "plan_code": plan.get("code"),
+                "upgrade_url": "/payment",
+            },
+            status_code=429,
+        )
+
+    return user, plan, None
+
+
+def mayar_secret_matches(request: Request) -> bool:
+    expected = os.getenv("MAYAR_WEBHOOK_SECRET", "").strip()
+    if not expected:
+        return True
+    candidates = [
+        request.headers.get("x-webhook-secret", ""),
+        request.headers.get("x-mayar-webhook-secret", ""),
+    ]
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        candidates.append(auth_header.split(" ", 1)[1].strip())
+    return any(candidate == expected for candidate in candidates)
+
+
+async def upsert_payment_transaction(payment: dict) -> dict | None:
+    provider_invoice_id = payment.get("provider_invoice_id")
+    existing = None
+    if provider_invoice_id:
+        status_code, data, _ = await supabase_rest_request(
+            "GET",
+            "/rest/v1/payment_transactions",
+            params={
+                "select": "*",
+                "provider_invoice_id": f"eq.{provider_invoice_id}",
+                "limit": "1",
+            },
+        )
+        if status_code == 200 and isinstance(data, list) and data:
+            existing = data[0]
+
+    method = "PATCH" if existing else "POST"
+    path = "/rest/v1/payment_transactions"
+    params = {"id": f"eq.{existing['id']}"} if existing else None
+    status_code, data, _ = await supabase_rest_request(
+        method,
+        path,
+        params=params,
+        payload=payment,
+        prefer="return=representation",
+    )
+    if status_code not in (200, 201):
+        return existing
+    return data[0] if isinstance(data, list) and data else existing
+
+
+async def upsert_subscription_record(
+    *,
+    user_id: str,
+    plan_code: str,
+    provider_invoice_id: str | None,
+    status: str,
+    paid_at: datetime | None,
+):
+    existing = await fetch_latest_subscription(user_id)
+    start_at = paid_at or datetime.now(timezone.utc)
+    end_at = billing_period_end(start_at, plan_code)
+    payload = {
+        "user_id": user_id,
+        "plan_code": plan_code,
+        "provider": "mayar",
+        "provider_invoice_id": provider_invoice_id,
+        "status": status,
+        "current_period_start": start_at.isoformat() if status == "active" else None,
+        "current_period_end": end_at.isoformat() if status == "active" and end_at else None,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    method = "PATCH" if existing else "POST"
+    params = {"id": f"eq.{existing['id']}"} if existing else None
+    status_code, data, _ = await supabase_rest_request(
+        method,
+        "/rest/v1/subscriptions",
+        params=params,
+        payload=payload,
+        prefer="return=representation",
+    )
+    if status_code not in (200, 201):
+        return existing
+    return data[0] if isinstance(data, list) and data else existing
 
 
 def render_public_account_page(
@@ -1104,6 +1421,21 @@ async def auth_signup(payload: dict = Body(...)):
         response.set_cookie(AUTH_COOKIE_NAME, access_token, httponly=True, samesite="lax", secure=COOKIE_SECURE, max_age=60 * 60 * 24 * 7)
     if refresh_token:
         response.set_cookie(REFRESH_COOKIE_NAME, refresh_token, httponly=True, samesite="lax", secure=COOKIE_SECURE, max_age=60 * 60 * 24 * 30)
+    user = data.get("user") or {}
+    user_id = user.get("id")
+    if user_id and supabase_rest_configured():
+        await supabase_rest_request(
+            "PATCH",
+            "/rest/v1/profiles",
+            params={"user_id": f"eq.{user_id}"},
+            payload={
+                "full_name": full_name or None,
+                "company_name": company_name or None,
+                "onboarding_use_case": onboarding_use_case or None,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            prefer="return=minimal",
+        )
     return response
 
 
@@ -1142,10 +1474,15 @@ async def auth_session(request: Request):
     if not supabase_auth_configured():
         return {"configured": False, "authenticated": False}
     user = await get_authenticated_user(request)
+    subscription = plan = None
+    if user and supabase_rest_configured():
+        subscription, plan = await fetch_current_subscription(user["id"])
     return {
         "configured": True,
         "authenticated": bool(user),
         "user": user,
+        "subscription": subscription,
+        "plan": plan,
     }
 
 
@@ -1154,6 +1491,7 @@ async def system_config():
     plans = get_plan_catalog()
     return {
         "supabase_configured": supabase_auth_configured(),
+        "supabase_rest_configured": supabase_rest_configured(),
         "mayar_ready": all(bool(plan["checkout_url"]) for plan in plans),
         "plans": [
             {
@@ -1165,10 +1503,137 @@ async def system_config():
     }
 
 
+@app.get("/api/account/usage")
+async def account_usage(request: Request):
+    if not supabase_auth_configured():
+        return {"configured": False}
+
+    user = await get_authenticated_user(request)
+    if not user:
+        return JSONResponse({"error": "Silakan login dulu."}, status_code=401)
+
+    if not supabase_rest_configured():
+        return {"configured": True, "database_ready": False, "user": user}
+
+    subscription, plan = await fetch_current_subscription(user["id"])
+    period_start = usage_period_start(subscription)
+    counters = {}
+    for event_type in ("search", "profile", "comments", "transcript"):
+        counters[event_type] = await get_usage_total(user["id"], event_type, period_start)
+
+    return {
+        "configured": True,
+        "database_ready": True,
+        "user": user,
+        "subscription": subscription,
+        "plan": plan,
+        "period_start": period_start.isoformat(),
+        "usage": counters,
+    }
+
+
 @app.post("/api/payment/webhook/mayar")
-async def mayar_webhook(payload: dict):
-    # Temporary ingestion point until Supabase/Postgres wiring is connected.
-    return {"received": True, "provider": "mayar", "keys": sorted(payload.keys())}
+async def mayar_webhook(request: Request, payload: dict = Body(...)):
+    if not mayar_secret_matches(request):
+        return JSONResponse({"error": "Webhook secret tidak valid."}, status_code=401)
+
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    amount = int(data.get("amount") or payload.get("amount") or 0)
+    payer_email = normalize_text(
+        data.get("customerEmail")
+        or data.get("email")
+        or payload.get("customerEmail")
+        or payload.get("email")
+    ).lower()
+    provider_invoice_id = str(
+        data.get("invoiceId")
+        or data.get("id")
+        or payload.get("invoiceId")
+        or payload.get("id")
+        or ""
+    ).strip() or None
+    provider_payment_id = str(
+        data.get("transactionId")
+        or data.get("paymentId")
+        or payload.get("transactionId")
+        or payload.get("paymentId")
+        or ""
+    ).strip() or None
+    checkout_url = (
+        data.get("paymentUrl")
+        or data.get("invoiceUrl")
+        or payload.get("paymentUrl")
+        or payload.get("invoiceUrl")
+        or ""
+    )
+    raw_status = normalize_text(
+        data.get("status")
+        or payload.get("status")
+        or payload.get("event")
+        or ""
+    ).lower()
+    product_name = normalize_text(
+        data.get("productName")
+        or payload.get("productName")
+        or data.get("description")
+        or payload.get("description")
+    )
+    paid_at = (
+        parse_epoch_millis(data.get("updatedAt"))
+        or parse_epoch_millis(data.get("paidAt"))
+        or parse_epoch_millis(payload.get("updatedAt"))
+        or parse_epoch_millis(payload.get("paidAt"))
+    )
+
+    payment_status = "pending"
+    subscription_status = "pending"
+    if raw_status in {"paid", "success", "settled", "completed", "true"}:
+        payment_status = "paid"
+        subscription_status = "active"
+    elif raw_status in {"failed", "expired", "cancelled", "canceled"}:
+        payment_status = "failed" if raw_status == "failed" else "expired"
+        subscription_status = "expired" if raw_status == "expired" else "cancelled"
+
+    plan_code = infer_plan_code(product_name, amount)
+    profile = await fetch_profile_by_email(payer_email) if payer_email else None
+    subscription = None
+    if profile and plan_code:
+        subscription = await upsert_subscription_record(
+            user_id=profile["user_id"],
+            plan_code=plan_code,
+            provider_invoice_id=provider_invoice_id,
+            status=subscription_status,
+            paid_at=paid_at,
+        )
+
+    transaction = await upsert_payment_transaction(
+        {
+            "user_id": profile.get("user_id") if profile else None,
+            "subscription_id": subscription.get("id") if subscription else None,
+            "provider": "mayar",
+            "provider_invoice_id": provider_invoice_id,
+            "provider_payment_id": provider_payment_id,
+            "checkout_url": checkout_url or None,
+            "amount_idr": amount,
+            "currency": normalize_text(data.get("currency") or payload.get("currency") or "IDR") or "IDR",
+            "status": payment_status,
+            "payer_email": payer_email or None,
+            "raw_payload": payload,
+            "paid_at": paid_at.isoformat() if paid_at else None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    return {
+        "received": True,
+        "provider": "mayar",
+        "payment_status": payment_status,
+        "subscription_status": subscription_status,
+        "plan_code": plan_code,
+        "profile_found": bool(profile),
+        "subscription_id": subscription.get("id") if subscription else None,
+        "transaction_id": transaction.get("id") if transaction else None,
+    }
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page(request: Request):
@@ -1181,6 +1646,7 @@ async def app_page(request: Request):
 
 @app.get("/api/search")
 async def search(
+    request: Request,
     q: str = Query(...),
     platforms: str = Query("tiktok,youtube,instagram,twitter,facebook"),
     max: int = Query(5, ge=1, le=50),
@@ -1191,6 +1657,10 @@ async def search(
     min_likes: int | None = Query(None),
     max_likes: int | None = Query(None),
 ):
+    user, plan, denial = await enforce_feature_access(request, "search")
+    if denial:
+        return denial
+
     cache_key = (
         q.strip(),
         platforms,
@@ -1308,21 +1778,37 @@ async def search(
         "total": len(all_results),
         "elapsed": f"{elapsed:.1f}s",
         "cached": False,
+        "plan_code": plan.get("code") if plan else None,
         "json_file": json_file,
         "csv_file": csv_file,
         "results": [r.to_dict() for r in all_results],
     }
     SEARCH_CACHE[cache_key] = (time.time(), payload)
+    if user and supabase_rest_configured():
+        await record_usage_event(
+            user["id"],
+            "search",
+            {
+                "keywords": keywords,
+                "platforms": platform_list,
+                "total_results": len(all_results),
+            },
+        )
     return payload
 
 
 @app.get("/api/profile")
 async def profile(
+    request: Request,
     username: str = Query(...),
     max: int = Query(10, ge=1, le=50),
     sort: str = Query("latest"),
     date_range: str = Query("all"),
 ):
+    user, plan, denial = await enforce_feature_access(request, "profile")
+    if denial:
+        return denial
+
     cache_key = (username.lstrip("@").lower(), max, sort, date_range)
     cached = PROFILE_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < PROFILE_CACHE_TTL_SECONDS:
@@ -1353,11 +1839,21 @@ async def profile(
         "total": len(results),
         "elapsed": f"{elapsed:.1f}s",
         "cached": False,
+        "plan_code": plan.get("code") if plan else None,
         "json_file": json_file,
         "csv_file": csv_file,
         "results": [r.to_dict() for r in results],
     }
     PROFILE_CACHE[cache_key] = (time.time(), payload)
+    if user and supabase_rest_configured():
+        await record_usage_event(
+            user["id"],
+            "profile",
+            {
+                "username": username.lstrip("@"),
+                "total_results": len(results),
+            },
+        )
     return payload
 
 
@@ -1425,9 +1921,14 @@ def parse_upload_date(value: str | None):
 
 @app.get("/api/comments")
 async def comments(
+    request: Request,
     url: str = Query(...),
     max: int = Query(50, ge=1, le=200),
 ):
+    user, plan, denial = await enforce_feature_access(request, "comments")
+    if denial:
+        return denial
+
     cache_key = (url, max)
     cached = COMMENTS_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < COMMENTS_CACHE_TTL_SECONDS:
@@ -1449,9 +1950,21 @@ async def comments(
         "total": len(result),
         "video_comment_count": video_comment_count,
         "cached": False,
+        "plan_code": plan.get("code") if plan else None,
         "comments": result,
     }
     COMMENTS_CACHE[cache_key] = (time.time(), payload)
+    if user and supabase_rest_configured():
+        await record_usage_event(
+            user["id"],
+            "comments",
+            {
+                "url": url,
+                "requested_max": max,
+                "total_results": len(result),
+                "video_comment_count": video_comment_count,
+            },
+        )
     return payload
 
 

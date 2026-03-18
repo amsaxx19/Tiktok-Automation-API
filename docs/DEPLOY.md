@@ -35,14 +35,14 @@ MAYAR_WEBHOOK_SECRET=
 
 ## 3. Supabase SQL
 
-Masuk ke Supabase project:
+Schema sekarang sudah ada juga di folder migration Supabase:
 
-- Project ref: `banazgsnguqztoxqrgmb`
-- SQL Editor
+- [20260318220000_init_schema.sql](/Users/amosthiosa/Documents/Playground/supabase/migrations/20260318220000_init_schema.sql)
 
-Paste lalu run:
+Kalau deploy project baru, bisa pakai salah satu:
 
-- [schema.sql](/Users/amosthiosa/Documents/Playground/db/schema.sql)
+- `npx supabase db push`
+- atau paste [schema.sql](/Users/amosthiosa/Documents/Playground/db/schema.sql) ke SQL Editor
 
 ## 4. Mayar Setup
 
@@ -84,11 +84,15 @@ Set webhook Mayar ke:
 https://YOUR-DOMAIN/api/payment/webhook/mayar
 ```
 
-Saat ini endpoint webhook masih placeholder ingest.
+Webhook sekarang sudah:
+
+- verifikasi shared secret sederhana
+- simpan `payment_transactions`
+- update `subscriptions`
+- infer `plan_code` dari nama produk / nominal
 
 ## 8. Next Backend Work
 
-- simpan webhook ke `payment_transactions`
-- update `subscriptions`
-- aktifkan guard plan di `/api/search`, `/api/profile`, `/api/comments`
 - tampilkan status plan user di UI
+- tampilkan meter kuota user di UI
+- tambahkan custom invoice reference biar mapping payment -> user lebih deterministic
