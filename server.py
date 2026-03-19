@@ -4080,9 +4080,9 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <nav>
   <div class="logo">Sin<span>yal</span></div>
   <div class="nav-links">
-    <button class="nav-link active" onclick="switchPage('search', this)">Explore</button>
-    <button class="nav-link" onclick="switchPage('profile', this)">Profiles</button>
-    <button class="nav-link" onclick="switchPage('comments', this)">Comments</button>
+    <button class="nav-link active" onclick="switchPage('search', this)">Riset</button>
+    <button class="nav-link" onclick="switchPage('profile', this)">Profil</button>
+    <button class="nav-link" onclick="switchPage('comments', this)">Komentar</button>
   </div>
 </nav>
 
@@ -4137,12 +4137,12 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
         <input type="number" id="maxResults" value="3" min="1" max="50">
       </div>
       <div class="form-group">
-        <label class="form-label">Sort by</label>
+        <label class="form-label">Urutkan hasil</label>
         <select id="sortBy">
-          <option value="relevance">Most relevant</option>
-          <option value="popular">Most views</option>
-          <option value="most_liked">Most liked</option>
-          <option value="latest">Latest</option>
+          <option value="relevance">Paling relevan</option>
+          <option value="popular">Views tertinggi</option>
+          <option value="most_liked">Likes tertinggi</option>
+          <option value="latest">Terbaru</option>
         </select>
       </div>
       <div class="form-group">
@@ -4202,11 +4202,11 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Video sorting</label>
+      <label class="form-label">Urutkan video</label>
       <select id="profileSort">
-        <option value="latest">Latest</option>
-        <option value="popular">Popular</option>
-        <option value="oldest">Oldest</option>
+        <option value="latest">Terbaru</option>
+        <option value="popular">Paling populer</option>
+        <option value="oldest">Terlama</option>
       </select>
     </div>
     <div class="form-group">
@@ -4504,29 +4504,29 @@ function renderProfileAnalytics(results) {
   panel.innerHTML = `
     <div class="analytics-header">
       <h3>Profile signals</h3>
-      <p>${results.length} posts sampled</p>
+      <p>${results.length} konten dianalisis</p>
     </div>
     <div class="analytics-grid">
-      <div class="analytics-metric"><strong>${pct(avgEngagement)}</strong><span>Avg engagement rate</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'views'))}</strong><span>Avg views</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'likes'))}</strong><span>Avg likes</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'comments'))}</strong><span>Avg comments</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'shares'))}</strong><span>Avg shares</span></div>
-      <div class="analytics-metric"><strong>${fmt(sponsored.length)}</strong><span>Sponsored posts detected</span></div>
+      <div class="analytics-metric"><strong>${pct(avgEngagement)}</strong><span>Rata-rata engagement rate</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'views'))}</strong><span>Rata-rata views</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'likes'))}</strong><span>Rata-rata likes</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'comments'))}</strong><span>Rata-rata komentar</span></div>
+      <div class="analytics-metric"><strong>${fmt(avg(results, 'shares'))}</strong><span>Rata-rata share</span></div>
+      <div class="analytics-metric"><strong>${fmt(sponsored.length)}</strong><span>Konten sponsor terdeteksi</span></div>
     </div>
     <div style="height:16px"></div>
     <div class="analytics-header">
-      <h3>Content split</h3>
-      <p>Organic vs sponsored</p>
+      <h3>Pemisahan konten</h3>
+      <p>Organik vs sponsor</p>
     </div>
     <div class="analytics-split">
       <div class="analytics-split-row">
-        <div><strong>Organic</strong><span>${organic.length} posts</span></div>
-        <div style="text-align:right"><strong>${pct(avg(organic.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>avg ER</span></div>
+        <div><strong>Organik</strong><span>${organic.length} konten</span></div>
+        <div style="text-align:right"><strong>${pct(avg(organic.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>rata-rata ER</span></div>
       </div>
       <div class="analytics-split-row">
-        <div><strong>Sponsored</strong><span>${sponsored.length} posts</span></div>
-        <div style="text-align:right"><strong>${pct(avg(sponsored.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>avg ER</span></div>
+        <div><strong>Sponsored</strong><span>${sponsored.length} konten</span></div>
+        <div style="text-align:right"><strong>${pct(avg(sponsored.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>rata-rata ER</span></div>
       </div>
     </div>
   `;
