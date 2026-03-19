@@ -1937,9 +1937,11 @@ async def app_page(request: Request):
 @app.get("/api/search")
 async def search(
     request: Request,
-    q: str = Query(...),
+    q: str | None = Query(None),
+    keyword: str | None = Query(None),
     platforms: str = Query("tiktok,youtube,instagram,twitter,facebook"),
-    max: int = Query(5, ge=1, le=50),
+    max: int | None = Query(None, ge=1, le=50),
+    max_results: int | None = Query(None, ge=1, le=50),
     sort: str = Query("relevance"),
     date_range: str = Query("all"),
     min_views: int | None = Query(None),
@@ -1951,10 +1953,16 @@ async def search(
     if denial:
         return denial
 
+    query_value = (q or keyword or "").strip()
+    if not query_value:
+        return JSONResponse({"error": "Query wajib diisi via `q` atau `keyword`."}, 400)
+
+    max_value = max_results or max or 5
+
     cache_key = (
-        q.strip(),
+        query_value,
         platforms,
-        max,
+        max_value,
         sort,
         date_range,
         min_views,
@@ -1975,7 +1983,7 @@ async def search(
         return JSONResponse({"error": "No valid platforms"}, 400)
 
     # Support multiple keywords separated by newlines
-    keywords = [k.strip() for k in q.split("\n") if k.strip()]
+    keywords = [k.strip() for k in query_value.split("\n") if k.strip()]
     if not keywords:
         return JSONResponse({"error": "No keywords provided"}, 400)
 
@@ -1987,7 +1995,7 @@ async def search(
         task_cache_key = (
             name,
             keyword,
-            max,
+            max_value,
             sort,
             min_likes,
             max_likes,
@@ -2001,13 +2009,13 @@ async def search(
             work = partial(
                 scraper.search,
                 keyword,
-                max,
+                max_value,
                 sort=sort,
                 min_likes=min_likes,
                 max_likes=max_likes,
             )
         else:
-            work = partial(scraper.search, keyword, max)
+            work = partial(scraper.search, keyword, max_value)
 
         try:
             results = await asyncio.wait_for(
@@ -2091,7 +2099,8 @@ async def search(
 async def profile(
     request: Request,
     username: str = Query(...),
-    max: int = Query(10, ge=1, le=50),
+    max: int | None = Query(None, ge=1, le=50),
+    max_results: int | None = Query(None, ge=1, le=50),
     sort: str = Query("latest"),
     date_range: str = Query("all"),
 ):
@@ -2099,7 +2108,9 @@ async def profile(
     if denial:
         return denial
 
-    cache_key = (username.lstrip("@").lower(), max, sort, date_range)
+    max_value = max_results or max or 10
+
+    cache_key = (username.lstrip("@").lower(), max_value, sort, date_range)
     cached = PROFILE_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < PROFILE_CACHE_TTL_SECONDS:
         return {
@@ -2113,7 +2124,7 @@ async def profile(
 
     scraper = TikTokScraper()
     results = await loop.run_in_executor(
-        executor, partial(scraper.scrape_profile, username, max, sort)
+        executor, partial(scraper.scrape_profile, username, max_value, sort)
     )
     results = [enrich_result_text(result) for result in results]
     if date_range != "all":
@@ -2212,14 +2223,26 @@ def parse_upload_date(value: str | None):
 @app.get("/api/comments")
 async def comments(
     request: Request,
-    url: str = Query(...),
-    max: int = Query(50, ge=1, le=200),
+    url: str | None = Query(None),
+    video_url: str | None = Query(None),
+    platform: str | None = Query(None),
+    max: int | None = Query(None, ge=1, le=200),
+    max_comments: int | None = Query(None, ge=1, le=200),
 ):
     user, plan, denial = await enforce_feature_access(request, "comments")
     if denial:
         return denial
 
-    cache_key = (url, max)
+    target_url = (url or video_url or "").strip()
+    if not target_url:
+        return JSONResponse({"error": "URL video wajib diisi via `url` atau `video_url`."}, 400)
+
+    if platform and platform.lower() != "tiktok":
+        return JSONResponse({"error": "Comments scraping saat ini baru support TikTok."}, 400)
+
+    max_value = max_comments or max or 50
+
+    cache_key = (target_url, max_value)
     cached = COMMENTS_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < COMMENTS_CACHE_TTL_SECONDS:
         return {
@@ -2230,13 +2253,13 @@ async def comments(
     loop = asyncio.get_event_loop()
     scraper = TikTokScraper()
     result = await loop.run_in_executor(
-        executor, partial(scraper.scrape_comments, url, max)
+        executor, partial(scraper.scrape_comments, target_url, max_value)
     )
     video_comment_count = await loop.run_in_executor(
-        executor, partial(scraper.get_video_comment_count, url)
+        executor, partial(scraper.get_video_comment_count, target_url)
     )
     payload = {
-        "url": url,
+        "url": target_url,
         "total": len(result),
         "video_comment_count": video_comment_count,
         "cached": False,
@@ -2249,8 +2272,8 @@ async def comments(
             user["id"],
             "comments",
             {
-                "url": url,
-                "requested_max": max,
+                "url": target_url,
+                "requested_max": max_value,
                 "total_results": len(result),
                 "video_comment_count": video_comment_count,
             },
@@ -2272,7 +2295,7 @@ LANDING_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sinyal - Mesin Cari Sosial Media untuk Indonesia</title>
+<title>Sinyal - Content Intelligence untuk Creator Indonesia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
@@ -2954,7 +2977,7 @@ footer {
       <div class="hero-copy">
         <div class="eyebrow">Dibuat khusus buat cari sinyal sosial media di Indonesia</div>
         <h1>Kalau lagi cari topik yang <em>lagi rame</em>, jangan buka lima tab sekaligus.</h1>
-        <p>Sinyal bantu kamu cari konten, cek creator, baca komentar, dan nangkep isi video dalam satu tempat. Jadi kerja risetnya terasa ringan, bukan ribet.</p>
+        <p>Sinyal bantu kamu bedah hook, caption, komentar, dan isi video publik dari TikTok, Instagram, X, dan Facebook dalam satu tempat. Fokusnya buat riset pola konten yang jalan, bukan jualan angka estimasi yang ngawang.</p>
         <div class="hero-actions">
           <a class="button primary" href="/signup">Coba gratis dulu</a>
           <a class="button secondary" href="/payment">Lihat Paket</a>
@@ -3217,7 +3240,7 @@ footer {
 
   <footer>
     <div class="container">
-      Sinyal membantu orang Indonesia cari topik, creator, komentar, dan transkrip sosial media tanpa harus lompat-lompat antar platform.
+      Sinyal membantu creator dan affiliate marketer Indonesia ngebongkar pola konten publik: hook, caption, komentar, dan transkrip, tanpa harus lompat-lompat antar platform.
     </div>
   </footer>
 </div>
@@ -4016,7 +4039,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 <div class="hero">
   <div class="hero-kicker">Social Search Engine for Indonesia</div>
   <h1>Cari apa yang lagi <span class="gradient">rame di sosmed</span>.</h1>
-  <p>Satu search box untuk ngelihat sinyal konten dari TikTok, YouTube, Instagram, X, dan Facebook. Cocok buat riset topik, kompetitor, creator, dan campaign lokal.</p>
+  <p>Satu search box untuk riset hook, caption, transcript, dan pola konten publik dari TikTok, YouTube, Instagram, X, dan Facebook. Cocok buat creator, affiliate marketer, dan tim konten yang cari sinyal konten nyata.</p>
   <div class="hero-metrics">
     <div class="hero-metric"><strong>Riset cepat</strong><span>Masukkan keyword seperti orang pakai Google, terus bandingin hasil lintas platform.</span></div>
     <div class="hero-metric"><strong>Built for Indo</strong><span>Cocok buat nyari topik lokal, slang, brand, isu, dan niche yang lagi naik.</span></div>
@@ -4166,8 +4189,8 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
       <div id="profileStats"></div>
       <div id="profileDownloads"></div>
       <div class="section">
-        <div class="section-title"><div class="icon" style="background:rgba(217,72,31,0.12)">F</div> Feed Analytics</div>
-        <div class="filter-summary" id="profileFilterSummary">Load a profile to compare organic vs sponsored posts and search inside the feed.</div>
+        <div class="section-title"><div class="icon" style="background:rgba(217,72,31,0.12)">F</div> Feed Breakdown</div>
+        <div class="filter-summary" id="profileFilterSummary">Buka profil untuk lihat pola konten, post sponsor vs organik, dan cari angle yang sering dipakai.</div>
         <div class="filter-bar">
           <input type="text" id="profileFeedSearch" placeholder="Search post titles or captions..." oninput="applyProfileFilters()">
           <select id="profileSponsoredFilter" onchange="applyProfileFilters()">
@@ -4182,10 +4205,10 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
     <aside class="analytics-rail">
       <div id="profileAnalytics" class="analytics-panel">
         <div class="analytics-header">
-          <h3>Profile metrics</h3>
+          <h3>Profile signals</h3>
           <p>side rail</p>
         </div>
-        <div class="analytics-empty">Belum ada data. Buka satu profil TikTok dulu untuk lihat engagement rate, average metrics, dan split organic vs sponsored.</div>
+        <div class="analytics-empty">Belum ada data. Buka satu profil TikTok dulu untuk lihat sinyal konten, rata-rata performa, dan pola organik vs sponsor.</div>
       </div>
     </aside>
   </div>
@@ -4487,7 +4510,7 @@ function renderProfileAnalytics(results) {
   const panel = document.getElementById('profileAnalytics');
   panel.innerHTML = `
     <div class="analytics-header">
-      <h3>Profile metrics</h3>
+      <h3>Profile signals</h3>
       <p>${results.length} posts sampled</p>
     </div>
     <div class="analytics-grid">
