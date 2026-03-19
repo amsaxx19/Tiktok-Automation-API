@@ -10,6 +10,8 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 
 import httpx
+from pathlib import Path
+
 from fastapi import Body, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from dotenv import load_dotenv
@@ -26,6 +28,7 @@ load_dotenv()
 app = FastAPI(title="Social Media Scraper")
 executor = ThreadPoolExecutor(max_workers=5)
 SCRAPE_TIMEOUT_SECONDS = int(os.getenv("SCRAPE_TIMEOUT_SECONDS", "45"))
+OUTPUT_DIR = Path("output").resolve()
 PROFILE_CACHE_TTL_SECONDS = int(os.getenv("PROFILE_CACHE_TTL_SECONDS", "900"))
 SEARCH_CACHE_TTL_SECONDS = int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "900"))
 COMMENTS_CACHE_TTL_SECONDS = int(os.getenv("COMMENTS_CACHE_TTL_SECONDS", "900"))
@@ -38,6 +41,28 @@ COMMENTS_CACHE: dict[tuple[str, int], tuple[float, dict]] = {}
 PLATFORM_SEARCH_CACHE: dict[tuple, tuple[float, list]] = {}
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "script-src 'self' 'unsafe-inline'; "
+        "connect-src 'self' https:; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self';"
+    )
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "") or os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
@@ -2283,11 +2308,24 @@ async def comments(
 
 @app.get("/api/download")
 async def download(file: str = Query(...)):
-    if not file.startswith("output/") or ".." in file:
+    requested = (file or "").strip()
+    if not requested:
         return JSONResponse({"error": "Invalid file path"}, 400)
-    if not os.path.exists(file):
+
+    candidate = Path(requested)
+    if candidate.is_absolute():
+        return JSONResponse({"error": "Invalid file path"}, 400)
+
+    safe_path = (Path.cwd() / candidate).resolve()
+    try:
+        safe_path.relative_to(OUTPUT_DIR)
+    except ValueError:
+        return JSONResponse({"error": "Invalid file path"}, 400)
+
+    if not safe_path.exists() or not safe_path.is_file():
         return JSONResponse({"error": "File not found"}, 404)
-    return FileResponse(file, filename=os.path.basename(file))
+
+    return FileResponse(str(safe_path), filename=safe_path.name)
 
 
 LANDING_HTML = """<!DOCTYPE html>

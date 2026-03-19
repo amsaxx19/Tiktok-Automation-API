@@ -17,9 +17,12 @@ Ubah `Playground` dari generic multi-platform scraper menjadi **social media con
 1. Align positioning/copy/routes ke strategy doc (content intelligence, bukan analytics/sales estimator)
 2. Audit frontend/app wording yang masih generic scraper
 3. Tentukan fitur inti v1 yang paling sesuai dengan positioning baru
+4. Apply practical security baseline from `SECURITY.md`
+5. Improve mobile web UX so the product is usable on phones, not just desktop
 
 ## Next
 - Tambah page/section yang menonjolkan: hooks, captions, transcripts, hashtags, sounds
 - Kurangi wording yang terlalu generic / terlalu analytics-ish
 - Audit platform lain (IG/X/Facebook) dan putuskan mana yang dipertahankan untuk MVP
 - Tambah feature status dan demo flow docs
+- Implement security headers, safer downloads, and rate limiting
