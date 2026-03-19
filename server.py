@@ -1496,8 +1496,8 @@ async function loadNextStep() {
     button.textContent = data.cta_label || 'Lanjut';
     button.href = data.target || '/app';
   } catch (e) {
-    title.textContent = 'Arah berikutnya belum kebaca';
-    body.textContent = 'Session atau backend belum siap. Kamu tetap bisa lanjut manual ke app atau payment.';
+    title.textContent = 'Lanjut ke workspace';
+    body.textContent = 'Kalau langkah otomatis belum kebaca, kamu tetap bisa lanjut manual ke app atau ke halaman paket.';
     button.textContent = 'Buka app';
     button.href = '/app';
   }
@@ -1803,8 +1803,8 @@ async def account_next_step(request: Request):
         return {
             "configured": False,
             "target": "/app",
-            "title": "Mode development aktif",
-            "message": "Auth belum aktif di environment ini, jadi app bisa langsung dibuka untuk development.",
+            "title": "Workspace siap dibuka",
+            "message": "Kamu bisa langsung masuk ke app dan mulai eksplor workflow riset yang ada sekarang.",
             "cta_label": "Buka app",
         }
 
@@ -3404,7 +3404,7 @@ APP_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sinyal - Social Search for Indonesia</title>
+<title>Sinyal - Content Intelligence Workspace</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -4051,14 +4051,26 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   .hero { padding-top: 54px; }
   .hero h1 { font-size: 42px; }
   .hero-metrics { grid-template-columns: 1fr; }
-  nav { padding: 14px 20px; }
+  nav { padding: 14px 20px; flex-direction: column; align-items: stretch; gap: 12px; }
+  .nav-links { width: 100%; overflow-x: auto; padding-bottom: 2px; }
   .main { padding: 0 20px 48px; }
-  .account-strip { padding: 0 20px; }
-  .account-panel { grid-template-columns: 1fr; }
-  .account-actions { justify-content: flex-start; }
   .profile-shell { grid-template-columns: 1fr; }
   .analytics-rail { position: static; }
   .filter-bar { grid-template-columns: 1fr; }
+  .download-row { flex-direction: column; }
+  .download-btn { width: 100%; justify-content: center; }
+}
+
+@media (max-width: 640px) {
+  .hero { padding: 36px 20px 18px; }
+  .hero h1 { font-size: 34px; line-height: 1.08; }
+  .hero p { font-size: 15px; }
+  .section { padding: 20px; border-radius: 22px; }
+  textarea { min-height: 128px; }
+  .quick-picks { gap: 8px; }
+  .quick-pick { width: 100%; justify-content: center; text-align: center; }
+  .result-card { padding: 14px 16px; }
+  .result-top { align-items: flex-start; gap: 8px; flex-direction: column; }
 }
 </style>
 </head>
@@ -4075,13 +4087,13 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
 </nav>
 
 <div class="hero">
-  <div class="hero-kicker">Social Search Engine for Indonesia</div>
-  <h1>Cari apa yang lagi <span class="gradient">rame di sosmed</span>.</h1>
-  <p>Satu search box untuk riset hook, caption, transcript, dan pola konten publik dari TikTok, YouTube, Instagram, X, dan Facebook. Cocok buat creator, affiliate marketer, dan tim konten yang cari sinyal konten nyata.</p>
+  <div class="hero-kicker">Content Intelligence untuk Creator Indonesia</div>
+  <h1>Bongkar <span class="gradient">pola konten yang jalan</span>.</h1>
+  <p>Riset hook, caption, transcript, komentar, dan pola performa konten publik dari TikTok, YouTube, Instagram, X, dan Facebook dalam satu workspace yang enak dipakai.</p>
   <div class="hero-metrics">
-    <div class="hero-metric"><strong>Riset cepat</strong><span>Masukkan keyword seperti orang pakai Google, terus bandingin hasil lintas platform.</span></div>
-    <div class="hero-metric"><strong>Built for Indo</strong><span>Cocok buat nyari topik lokal, slang, brand, isu, dan niche yang lagi naik.</span></div>
-    <div class="hero-metric"><strong>Actionable</strong><span>Lihat mana yang paling rame, siapa author-nya, dan ekspor hasil buat tim konten.</span></div>
+    <div class="hero-metric"><strong>Hook & caption</strong><span>Lihat opening line, caption, dan angle yang paling sering dipakai tanpa buka banyak tab.</span></div>
+    <div class="hero-metric"><strong>Signals, bukan gimmick</strong><span>Fokus ke pola konten publik yang benar-benar kelihatan, bukan angka estimasi yang ngawang.</span></div>
+    <div class="hero-metric"><strong>Siap dipakai tim</strong><span>Ekspor hasil riset dengan cepat buat creator, affiliate marketer, atau tim konten.</span></div>
   </div>
 </div>
 
@@ -4092,7 +4104,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   <div class="banner-inline hidden" id="searchBanner"></div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:var(--primary-bg)">S</div> Search Query</div>
+    <div class="section-title"><div class="icon" style="background:var(--primary-bg)">S</div> Search Workspace</div>
     <div class="form-group">
       <label class="form-label">Cari topik, brand, masalah, atau creator</label>
       <textarea id="keywords" placeholder="Contoh:&#10;skincare viral&#10;kopi susu literan&#10;lowongan kerja remote&#10;openai"></textarea>
@@ -4107,7 +4119,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   </div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(245,158,11,0.14)">P</div> Sources</div>
+    <div class="section-title"><div class="icon" style="background:rgba(245,158,11,0.14)">P</div> Platforms</div>
     <div class="chip-group">
       <div class="chip active" data-platform="tiktok" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-tiktok)"></span>TikTok</div>
       <div class="chip active" data-platform="youtube" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-youtube)"></span>YouTube</div>
@@ -4475,11 +4487,11 @@ function renderDownloads(containerId, json_file, csv_file) {
     <div class="download-row">
       <a class="download-btn" href="/api/download?file=${encodeURIComponent(json_file)}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        JSON
+        Export JSON
       </a>
       <a class="download-btn" href="/api/download?file=${encodeURIComponent(csv_file)}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        CSV
+        Export CSV
       </a>
     </div>`;
 }
