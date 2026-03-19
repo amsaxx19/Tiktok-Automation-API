@@ -41,6 +41,14 @@ COMMENTS_CACHE: dict[tuple[str, int], tuple[float, dict]] = {}
 PLATFORM_SEARCH_CACHE: dict[tuple, tuple[float, list]] = {}
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
+RATE_LIMIT_RULES = {
+    "auth_signup": (10, 300),
+    "auth_signin": (15, 300),
+    "search": (30, 300),
+    "profile": (30, 300),
+    "comments": (20, 300),
+}
 
 
 @app.middleware("http")
@@ -465,6 +473,44 @@ async def record_usage_event(user_id: str, event_type: str, metadata: dict | Non
         },
         prefer="return=minimal",
     )
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    real_ip = (request.headers.get("x-real-ip") or "").strip()
+    if forwarded:
+        return forwarded
+    if real_ip:
+        return real_ip
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def enforce_rate_limit(request: Request, bucket: str) -> JSONResponse | None:
+    rule = RATE_LIMIT_RULES.get(bucket)
+    if not rule:
+        return None
+    limit, window_seconds = rule
+    now = time.time()
+    key = f"{bucket}:{get_client_ip(request)}"
+    timestamps = [ts for ts in RATE_LIMIT_BUCKETS.get(key, []) if now - ts < window_seconds]
+    if len(timestamps) >= limit:
+        retry_after = max(1, int(window_seconds - (now - timestamps[0])))
+        response = JSONResponse(
+            {
+                "error": "Terlalu banyak request. Coba lagi sebentar lagi.",
+                "code": "rate_limited",
+                "bucket": bucket,
+                "retry_after": retry_after,
+            },
+            status_code=429,
+        )
+        response.headers["Retry-After"] = str(retry_after)
+        return response
+    timestamps.append(now)
+    RATE_LIMIT_BUCKETS[key] = timestamps
+    return None
 
 
 async def enforce_feature_access(request: Request, feature: str) -> tuple[dict | None, dict | None, JSONResponse | None]:
@@ -1659,7 +1705,10 @@ async def billing_plans():
 
 
 @app.post("/api/auth/signup")
-async def auth_signup(payload: dict = Body(...)):
+async def auth_signup(request: Request, payload: dict = Body(...)):
+    rate_limited = enforce_rate_limit(request, "auth_signup")
+    if rate_limited:
+        return rate_limited
     email = normalize_text(payload.get("email"))
     password = payload.get("password", "")
     full_name = normalize_text(payload.get("full_name"))
@@ -1705,7 +1754,10 @@ async def auth_signup(payload: dict = Body(...)):
 
 
 @app.post("/api/auth/signin")
-async def auth_signin(payload: dict = Body(...)):
+async def auth_signin(request: Request, payload: dict = Body(...)):
+    rate_limited = enforce_rate_limit(request, "auth_signin")
+    if rate_limited:
+        return rate_limited
     email = normalize_text(payload.get("email"))
     password = payload.get("password", "")
 
@@ -1974,6 +2026,10 @@ async def search(
     min_likes: int | None = Query(None),
     max_likes: int | None = Query(None),
 ):
+    rate_limited = enforce_rate_limit(request, "search")
+    if rate_limited:
+        return rate_limited
+
     user, plan, denial = await enforce_feature_access(request, "search")
     if denial:
         return denial
@@ -2129,6 +2185,10 @@ async def profile(
     sort: str = Query("latest"),
     date_range: str = Query("all"),
 ):
+    rate_limited = enforce_rate_limit(request, "profile")
+    if rate_limited:
+        return rate_limited
+
     user, plan, denial = await enforce_feature_access(request, "profile")
     if denial:
         return denial
@@ -2254,6 +2314,10 @@ async def comments(
     max: int | None = Query(None, ge=1, le=200),
     max_comments: int | None = Query(None, ge=1, le=200),
 ):
+    rate_limited = enforce_rate_limit(request, "comments")
+    if rate_limited:
+        return rate_limited
+
     user, plan, denial = await enforce_feature_access(request, "comments")
     if denial:
         return denial
