@@ -1441,16 +1441,16 @@ p.lead {
     <div class="panel">
       <div class="eyebrow">Lanjutkan setup akun</div>
       <h1>Tinggal satu langkah lagi buat mulai kerja.</h1>
-      <p class="lead">Halaman ini otomatis ngecek akun, paket, dan langkah berikutnya. Jadi habis daftar atau login, user nggak dilempar ke tempat yang bikin bingung.</p>
+      <p class="lead">Halaman ini bantu orang lanjut ke langkah berikutnya tanpa bingung: bikin akun, aktifkan paket, lalu langsung masuk ke workspace riset.</p>
       <div class="steps">
-        <div class="step"><strong>1. Bikin akun</strong><span>Data user masuk ke auth dan profil dasar langsung tersimpan.</span></div>
-        <div class="step"><strong>2. Pilih paket</strong><span>Kalau paket belum aktif, sistem arahkan ke pembayaran tanpa muter-muter.</span></div>
-        <div class="step"><strong>3. Mulai riset</strong><span>Begitu aktif, app langsung baca akses dan kuota dari backend.</span></div>
+        <div class="step"><strong>1. Bikin akun</strong><span>Masuk cepat supaya hasil riset dan aktivitasmu tersimpan rapi.</span></div>
+        <div class="step"><strong>2. Aktifkan akses</strong><span>Pilih paket yang paling cocok biar semua fitur utama bisa dipakai.</span></div>
+        <div class="step"><strong>3. Mulai riset</strong><span>Begitu siap, langsung masuk ke app dan cari pola konten yang lagi jalan.</span></div>
       </div>
     </div>
     <div class="panel status-card">
-      <strong id="nextStepTitle">Sedang cek akun...</strong>
-      <p id="nextStepBody">Tunggu sebentar, saya lagi baca session dan status paket dari backend.</p>
+      <strong id="nextStepTitle">Sedang menyiapkan langkah berikutnya...</strong>
+      <p id="nextStepBody">Tunggu sebentar, kami lagi lihat langkah paling pas buat kamu lanjut.</p>
       <div class="actions">
         <a class="button primary" id="nextStepButton" href="/app">Lanjut</a>
         <a class="button soft" href="/">Kembali ke landing</a>
@@ -1499,7 +1499,7 @@ async def signup_page():
         title="Daftar Sinyal",
         eyebrow="Buka akun baru",
         heading="Bikin akun, pilih paket, lalu langsung mulai riset.",
-        subheading="Halaman ini saya siapkan buat flow onboarding produk. Setelah auth dan payment kita hubungkan, user tinggal daftar, pilih paket, lalu masuk ke dashboard tanpa bingung.",
+        subheading="Buka akun dulu, lalu lanjut pilih paket dan masuk ke workspace riset tanpa ribet.",
         primary_label="Daftar Sekarang",
         secondary_label="Sudah punya akun? Masuk di sini",
         secondary_href="/signin",
@@ -1509,16 +1509,16 @@ async def signup_page():
         <div class="field"><label>Email kerja</label><input id="signupEmail" type="email" placeholder="nama@brand.com"></div>
         <div class="field"><label>Password</label><input id="signupPassword" type="password" placeholder="Minimal 8 karakter"></div>
         <div class="field"><label>Kamu pakai untuk apa?</label><select id="signupUseCase"><option>Riset konten</option><option>Vetting creator</option><option>Agency / tim sosial media</option><option>UMKM / brand</option></select></div>
-        <div id="signupStatus" class="note">Begitu Supabase env diisi, form ini langsung daftar dan simpan session.</div>
+        <div id="signupStatus" class="note">Isi data di bawah, lalu lanjut ke langkah berikutnya.</div>
         """,
-        aside_title="Stack yang saya arahkan",
-        aside_body="Untuk versi production, signup ini saya arahkan ke Supabase Auth. Jadi email login, session, reset password, dan proteksi route nggak perlu kita bangun dari nol, lalu status langganan dibaca dari Postgres.",
+        aside_title="Apa yang terjadi setelah daftar",
+        aside_body="Begitu akun siap, kamu bisa pilih paket dan langsung masuk ke workspace riset tanpa setup manual yang bikin capek.",
         aside_list=[
-            "Auth: Supabase Auth untuk email/password, session, reset password, dan proteksi user.",
-            "Database: Postgres supaya user, paket, billing status, saved search, dan usage tinggal disimpan rapi di satu tempat.",
-            "Billing: Setelah pembayaran Mayar valid, role atau plan user langsung aktif dari database.",
+            "Akun siap dipakai untuk menyimpan workflow dan hasil riset.",
+            "Akses fitur menyesuaikan paket yang kamu pilih.",
+            "Begitu aktif, kamu bisa langsung mulai cari pola konten yang lagi jalan.",
         ],
-        footer_note="Versi sekarang masih page flow. Begitu kredensial auth siap, saya bisa sambungkan halaman ini ke backend sungguhan.",
+        footer_note="Fokus halaman ini sederhana: daftar cepat, lanjut, lalu mulai kerja.", 
         extra_script="""
         <script>
         document.querySelector('.submit')?.addEventListener('click', async () => {
@@ -1555,7 +1555,7 @@ async def signin_page():
         title="Masuk Sinyal",
         eyebrow="Masuk ke akun kamu",
         heading="Masuk cepat, lalu lanjut ke workspace risetmu.",
-        subheading="Signin saya arahkan ke flow yang simpel: email, password, lalu langsung cek status paket dan akses fitur sesuai plan user.",
+        subheading="Masuk cepat, lalu lanjut langsung ke workspace risetmu.",
         primary_label="Masuk",
         secondary_label="Belum punya akun? Daftar sekarang",
         secondary_href="/signup",
@@ -1563,16 +1563,16 @@ async def signin_page():
         <div class="field"><label>Email</label><input id="signinEmail" type="email" placeholder="nama@brand.com"></div>
         <div class="field"><label>Password</label><input id="signinPassword" type="password" placeholder="Masukkan password"></div>
         <div class="field"><label>Mode kerja</label><select><option>Ingat saya di perangkat ini</option><option>Perangkat tim bersama</option></select></div>
-        <div id="signinStatus" class="note">Login akan aktif begitu kredensial Supabase sudah terpasang di environment.</div>
+        <div id="signinStatus" class="note">Masuk dulu untuk lanjut ke app.</div>
         """,
-        aside_title="Yang akan dicek setelah login",
-        aside_body="Sebagai fullstack flow, login bukan cuma buka halaman. Setelah user masuk, backend harus baca status plan, kuota, dan izin fitur dari Postgres yang sudah diupdate dari pembayaran Mayar.",
+        aside_title="Setelah masuk",
+        aside_body="Begitu login berhasil, kamu bisa lanjut ke app dan mulai riset tanpa pindah-pindah tempat.",
         aside_list=[
-            "Cek paket aktif atau belum.",
-            "Cek kuota search, profile, comment, dan transcript bulan berjalan.",
-            "Kalau billing bermasalah, arahkan user ke halaman payment tanpa muter-muter.",
+            "Masuk ke workspace riset lebih cepat.",
+            "Lanjut ke paket kalau akses belum aktif.",
+            "Kembali kerja tanpa bingung cari halaman yang benar.",
         ],
-        footer_note="Signin ini nanti paling aman pakai session/Auth provider, bukan custom token buatan sendiri tanpa fondasi yang jelas.",
+        footer_note="Fokus signin ini sederhana: masuk cepat dan lanjut kerja.", 
         extra_script="""
         <script>
         document.querySelector('.submit')?.addEventListener('click', async () => {
@@ -4047,17 +4047,6 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   </div>
 </div>
 
-<div class="account-strip">
-  <div class="account-panel" id="accountPanel">
-    <div class="account-copy">
-      <strong id="accountTitle">Sedang cek status akun...</strong>
-      <p id="accountBody">Begitu session dan paket kebaca, status billing dan sisa kuota bakal muncul di sini.</p>
-      <div class="usage-chips" id="usageChips"></div>
-    </div>
-    <div class="account-actions" id="accountActions"></div>
-  </div>
-</div>
-
 <div class="main">
 
 <!-- ==================== SEARCH PAGE ==================== -->
@@ -4329,51 +4318,6 @@ function setBanner(id, html = '') {
   el.classList.remove('hidden');
 }
 
-function renderAccountPanel() {
-  const title = document.getElementById('accountTitle');
-  const body = document.getElementById('accountBody');
-  const chips = document.getElementById('usageChips');
-  const actions = document.getElementById('accountActions');
-
-  if (!sessionState || !sessionState.configured) {
-    title.textContent = 'Mode lokal aktif';
-    body.textContent = 'Auth Supabase belum aktif di environment ini. App masih bisa dipakai untuk development tanpa billing guard.';
-    chips.innerHTML = '<div class="usage-chip"><strong>Dev</strong> Auth off</div>';
-    actions.innerHTML = '<a class="btn btn-secondary" href="/">Lihat landing</a>';
-    return;
-  }
-
-  if (!sessionState.authenticated) {
-    title.textContent = 'Belum login';
-    body.textContent = 'Masuk dulu untuk buka fitur search, profile, dan comments. Setelah itu paket aktif dan kuota akan kebaca otomatis.';
-    chips.innerHTML = '';
-    actions.innerHTML = '<a class="btn btn-secondary" href="/signin">Masuk</a><a class="btn btn-primary" href="/signup">Daftar</a>';
-    return;
-  }
-
-  const userEmail = sessionState.user?.email || 'akun aktif';
-  const plan = usageState?.plan || sessionState.plan;
-  const subscription = usageState?.subscription || sessionState.subscription;
-  const active = subscription && subscription.status === 'active';
-
-  title.textContent = active ? `Login sebagai ${userEmail}` : `Akun ${userEmail} belum punya paket aktif`;
-  body.textContent = active
-    ? `Paket ${plan?.name || plan?.code || subscription?.plan_code || '-'} aktif. Sisa kuota bulan ini langsung dipantau dari backend.`
-    : 'Pilih paket dulu untuk buka semua fitur. Begitu pembayaran masuk, akses akan aktif otomatis tanpa setup manual.';
-
-  const usage = usageState?.usage || {};
-  chips.innerHTML = active ? `
-    <div class="usage-chip"><strong>Search</strong>${usage.search || 0} / ${plan?.monthly_search_limit || 0}</div>
-    <div class="usage-chip"><strong>Profile</strong>${usage.profile || 0} / ${plan?.monthly_profile_limit || 0}</div>
-    <div class="usage-chip"><strong>Comments</strong>${usage.comments || 0} / ${plan?.monthly_comment_limit || 0}</div>
-    <div class="usage-chip"><strong>Transcript</strong>${usage.transcript || 0} / ${plan?.monthly_transcript_limit || 0}</div>
-  ` : '<div class="usage-chip"><strong>Status</strong>Belum aktif</div>';
-
-  actions.innerHTML = active
-    ? '<a class="btn btn-secondary" href="/payment">Kelola paket</a><button class="btn btn-secondary" type="button" onclick="doSignout()">Keluar</button>'
-    : '<a class="btn btn-primary" href="/payment">Pilih paket</a><button class="btn btn-secondary" type="button" onclick="doSignout()">Keluar</button>';
-}
-
 async function refreshAccountState() {
   try {
     const sessionResp = await fetch('/api/auth/session');
@@ -4386,7 +4330,6 @@ async function refreshAccountState() {
   } catch (e) {
     sessionState = { configured: false };
   }
-  renderAccountPanel();
 }
 
 async function doSignout() {
