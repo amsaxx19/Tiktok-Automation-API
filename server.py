@@ -3611,6 +3611,55 @@ nav {
   border: 1px solid rgba(79,49,27,0.08);
   text-align: left;
 }
+.signal-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.signal-tab {
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(79,49,27,0.08);
+  background: rgba(255,255,255,0.74);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.overview-card {
+  background: linear-gradient(180deg, rgba(26,18,16,0.94), rgba(40,28,23,0.92));
+  color: #f7efe8;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 22px;
+  padding: 18px;
+  box-shadow: 0 18px 44px rgba(17, 10, 7, 0.26);
+}
+.overview-card strong {
+  display: block;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+.overview-card p {
+  color: rgba(255,255,255,0.72);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.overview-card .mini-label {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: rgba(255,255,255,0.66);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
 .hero-metric strong {
   display: block;
   font-family: 'Space Grotesk', sans-serif;
@@ -4115,6 +4164,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   .hero { padding-top: 54px; }
   .hero h1 { font-size: 42px; }
   .hero-metrics { grid-template-columns: 1fr; }
+  .overview-grid { grid-template-columns: 1fr; }
   nav { padding: 14px 20px; flex-direction: column; align-items: stretch; gap: 12px; }
   .nav-links { width: 100%; overflow-x: auto; padding-bottom: 2px; }
   .main { padding: 0 20px 48px; }
@@ -4159,9 +4209,32 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
     <div class="hero-metric"><strong>Signals, bukan gimmick</strong><span>Fokus ke pola konten publik yang benar-benar kelihatan, bukan angka estimasi yang ngawang.</span></div>
     <div class="hero-metric"><strong>Siap dipakai tim</strong><span>Ekspor hasil riset dengan cepat buat creator, affiliate marketer, atau tim konten.</span></div>
   </div>
+  <div class="signal-tabs">
+    <div class="signal-tab">Hooks</div>
+    <div class="signal-tab">Captions</div>
+    <div class="signal-tab">Comments</div>
+    <div class="signal-tab">Transcripts</div>
+  </div>
 </div>
 
 <div class="main">
+  <div class="overview-grid">
+    <div class="overview-card">
+      <span class="mini-label">Trending signals</span>
+      <strong>Top hook patterns lagi ngumpul di satu layar</strong>
+      <p>Lihat pembuka yang paling sering dipakai, caption yang berulang, dan angle yang lagi naik tanpa buka banyak tab.</p>
+    </div>
+    <div class="overview-card">
+      <span class="mini-label">Comments intel</span>
+      <strong>Bahasa pasar lebih kebaca</strong>
+      <p>Cari pertanyaan yang berulang, pain point yang muncul, dan komentar yang bisa dipakai buat ide konten berikutnya.</p>
+    </div>
+    <div class="overview-card">
+      <span class="mini-label">Transcripts</span>
+      <strong>Isi video lebih cepat dipahami</strong>
+      <p>Nggak perlu nonton semua video satu-satu. Fokus ke bagian yang paling penting buat riset.</p>
+    </div>
+  </div>
 
 <!-- ==================== SEARCH PAGE ==================== -->
 <div class="page active" id="page-search">
