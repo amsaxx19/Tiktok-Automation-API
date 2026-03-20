@@ -4212,9 +4212,9 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
       <div class="form-group">
         <label class="form-label">Date range</label>
         <select id="searchDateRange">
-          <option value="all">All time</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
+          <option value="all">Sepanjang waktu</option>
+          <option value="7d">7 hari terakhir</option>
+          <option value="30d">30 hari terakhir</option>
         </select>
       </div>
     </div>
@@ -4254,7 +4254,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   <div class="banner-inline hidden" id="profileBanner"></div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">@</div> TikTok Profile Deep Dive</div>
+    <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">@</div> Profil TikTok</div>
     <div class="grid-2">
       <div class="form-group">
         <label class="form-label">Username TikTok</label>
@@ -4295,7 +4295,7 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
         <div class="section-title"><div class="icon" style="background:rgba(217,72,31,0.12)">F</div> Feed Breakdown</div>
         <div class="filter-summary" id="profileFilterSummary">Buka profil untuk lihat pola konten, post sponsor vs organik, dan cari angle yang sering dipakai.</div>
         <div class="filter-bar">
-          <input type="text" id="profileFeedSearch" placeholder="Search post titles or captions..." oninput="applyProfileFilters()">
+          <input type="text" id="profileFeedSearch" placeholder="Cari judul atau caption konten..." oninput="applyProfileFilters()">
           <select id="profileSponsoredFilter" onchange="applyProfileFilters()">
             <option value="all">All posts</option>
             <option value="organic">Organic only</option>
@@ -4322,14 +4322,14 @@ select { cursor: pointer; appearance: none; background-image: url("data:image/sv
   <div class="banner-inline hidden" id="commentBanner"></div>
 
   <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">C</div> TikTok Comment Readout</div>
+    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">C</div> Komentar TikTok</div>
     <div class="grid-2">
       <div class="form-group">
-        <label class="form-label">Video URL</label>
+        <label class="form-label">URL video</label>
         <input type="text" id="commentUrl" placeholder="https://www.tiktok.com/@user/video/123...">
       </div>
       <div class="form-group">
-        <label class="form-label">Max comments</label>
+        <label class="form-label">Maks komentar</label>
         <input type="number" id="commentMax" value="50" min="1" max="200">
       </div>
     </div>
