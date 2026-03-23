@@ -1,5 +1,6 @@
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
@@ -39,16 +40,74 @@ class InstagramScraper(BaseScraper):
         print(f"[Instagram] Found {len(urls)} posts/reels, fetching details...")
 
         results = []
-        for i, post_url in enumerate(urls):
-            try:
-                result = self._scrape_post(post_url, keyword)
-                if result:
-                    results.append(result)
-                    print(f"[Instagram] ({i+1}/{len(urls)}) @{result.author} - {result.likes} likes")
-            except Exception as e:
-                print(f"[Instagram] Error scraping {post_url}: {e}")
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(urls)))) as pool:
+            futures = {
+                pool.submit(self._scrape_post, post_url, keyword): post_url
+                for post_url in urls
+            }
+            for future in as_completed(futures):
+                post_url = futures[future]
+                try:
+                    result = future.result()
+                    if result:
+                        results.append(result)
+                        print(f"[Instagram] ({len(results)}/{len(urls)}) @{result.author} - {result.likes} likes")
+                        if len(results) >= max_results:
+                            break
+                except Exception as e:
+                    print(f"[Instagram] Error scraping {post_url}: {e}")
 
         return results
+
+    def _search_via_hashtag(self, keyword: str, max_results: int) -> list[str]:
+        tag = keyword.replace(" ", "").lower()
+        url = f"https://www.instagram.com/explore/tags/{quote(tag)}/"
+
+        response = self.fetch_page(
+            url,
+            wait_selector='a[href*="/reel/"], a[href*="/p/"]',
+            timeout=15000,
+        )
+        if response.status != 200:
+            return []
+
+        reel_links = response.css('a[href*="/reel/"]')
+        post_links = response.css('a[href*="/p/"]')
+
+        urls = []
+        seen = set()
+        for link in list(reel_links) + list(post_links):
+            href = link.attrib.get("href", "")
+            if href and href not in seen:
+                seen.add(href)
+                full_url = f"https://www.instagram.com{href}" if href.startswith("/") else href
+                urls.append(full_url)
+            if len(urls) >= max_results:
+                break
+        return urls
+
+    def _search_via_google(self, keyword: str, max_results: int) -> list[str]:
+        encoded = quote(f"site:instagram.com/reel {keyword}")
+        url = f"https://www.google.com/search?q={encoded}&num=30"
+
+        response = self.fetch_page(url, network_idle=True, timeout=12000)
+        if response.status != 200:
+            return []
+
+        urls = []
+        seen = set()
+        for link in response.css("a"):
+            href = link.attrib.get("href", "")
+            if "instagram.com" in href and ("/reel/" in href or "/p/" in href):
+                if "url?q=" in href:
+                    href = href.split("url?q=")[1].split("&")[0]
+                href = href.split("#")[0]
+                if href not in seen:
+                    seen.add(href)
+                    urls.append(href)
+            if len(urls) >= max_results:
+                break
+        return urls
 
     @staticmethod
     def _parse_abbreviated(number_str: str, suffix: str | None) -> int | None:
@@ -60,8 +119,8 @@ class InstagramScraper(BaseScraper):
             return None
 
     def _scrape_post(self, url: str, keyword: str) -> VideoResult | None:
-        resp = self.fetch_page(url)
-        if resp.status_code != 200:
+        response = self.fetch_page(url, wait_selector='meta[property="og:title"], meta[name="description"]', timeout=12000)
+        if response.status != 200:
             return None
 
         soup = BeautifulSoup(resp.text, "lxml")

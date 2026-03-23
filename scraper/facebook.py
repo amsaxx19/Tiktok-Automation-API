@@ -1,4 +1,5 @@
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import quote
 from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
@@ -7,17 +8,18 @@ from scraper.models import VideoResult
 
 class FacebookScraper(BaseScraper):
     platform = "facebook"
+    GENERIC_AUTHOR_SEGMENTS = {"reel", "videos", "watch"}
 
     def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
         print(f"[Facebook] Searching for: {keyword}")
 
-        # Facebook requires login for most pages, use Google discovery
-        encoded = quote(f"site:facebook.com/watch {keyword}")
-        url = f"https://www.google.com/search?q={encoded}&num=30"
-
-        resp = self.fetch_page(url)
-        if resp.status_code != 200:
-            print(f"[Facebook] Google search failed with status {resp.status_code}")
+        response = self.fetch_page(
+            url,
+            wait_selector='a[href*="/videos/"], a[href*="/reel/"]',
+            timeout=15000,
+        )
+        if response.status != 200:
+            print(f"[Facebook] Failed with status {response.status}")
             return []
 
         soup = BeautifulSoup(resp.text, "lxml")
@@ -37,24 +39,41 @@ class FacebookScraper(BaseScraper):
 
         print(f"[Facebook] Found {len(urls)} video URLs, fetching details...")
 
-        results = []
-        for i, video_url in enumerate(urls):
-            try:
-                result = self._scrape_video(video_url, keyword)
-                if result:
-                    results.append(result)
-                    print(f"[Facebook] ({i+1}/{len(urls)}) {result.author} - {result.views} views")
-            except Exception as e:
-                print(f"[Facebook] Error scraping {video_url}: {e}")
+        # Map view counts to results (they appear in order)
+        for i, views in enumerate(view_data):
+            if i < len(results):
+                results[i].views = views
+
+        print(f"[Facebook] Found {len(results)} videos")
+
+        # Fetch details for each video
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(results)))) as pool:
+            futures = {
+                pool.submit(self._enrich_video, result): result.video_url
+                for result in results
+            }
+            completed = 0
+            for future in as_completed(futures):
+                video_url = futures[future]
+                try:
+                    future.result()
+                    completed += 1
+                    result = next((item for item in results if item.video_url == video_url), None)
+                    if result and (result.title or result.author):
+                        print(f"[Facebook] ({completed}/{len(results)}) {result.author} - {result.views} views")
+                except Exception as e:
+                    print(f"[Facebook] Error enriching {video_url}: {e}")
 
         return results
 
-    def _scrape_video(self, url: str, keyword: str) -> VideoResult | None:
-        resp = self.fetch_page(url)
-        if resp.status_code != 200:
-            return None
-
-        soup = BeautifulSoup(resp.text, "lxml")
+    def _enrich_video(self, result: VideoResult):
+        response = self.fetch_page(
+            result.video_url,
+            wait_selector='meta[property="og:title"], meta[name="description"]',
+            timeout=12000,
+        )
+        if response.status != 200:
+            return
 
         meta = {}
         for tag in soup.find_all("meta"):
@@ -67,37 +86,20 @@ class FacebookScraper(BaseScraper):
         description = meta.get("og:description", "")
         thumbnail = meta.get("og:image", "")
 
-        author = ""
-        url_match = re.search(r"facebook\.com/([^/]+)/", url)
-        if url_match:
-            author = url_match.group(1)
+        # Prefer page identity from metadata. Reel/watch path segments are not authors.
+        if not result.author:
+            for key in ("og:site_name", "twitter:title"):
+                candidate = (meta.get(key) or "").strip()
+                if candidate and candidate.lower() not in self.GENERIC_AUTHOR_SEGMENTS:
+                    result.author = candidate
+                    break
 
-        # Try to extract view count from description
-        views = None
-        views_match = re.search(r"([\d,.]+)\s*([KMB])?\s*views?", description, re.IGNORECASE)
-        if views_match:
-            views = self._parse_abbreviated(views_match.group(1), views_match.group(2) or "")
-
-        if not title and not description:
-            # Still return basic result from URL
-            return VideoResult(
-                platform="facebook",
-                keyword=keyword,
-                video_url=url,
-                author=author,
-            )
-
-        return VideoResult(
-            platform="facebook",
-            keyword=keyword,
-            video_url=url,
-            title=title,
-            description=description,
-            author=author,
-            author_url=f"https://www.facebook.com/{author}" if author else "",
-            views=views,
-            thumbnail=thumbnail,
-        )
+        if not result.author:
+            url_match = re.search(r"facebook\.com/([^/]+)/", result.video_url)
+            if url_match:
+                candidate = url_match.group(1)
+                if candidate not in self.GENERIC_AUTHOR_SEGMENTS:
+                    result.author = candidate
 
     @staticmethod
     def _parse_abbreviated(number_str: str, suffix: str) -> int | None:

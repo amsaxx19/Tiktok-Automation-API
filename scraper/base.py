@@ -22,11 +22,7 @@ class BaseScraper(ABC):
     }
 
     def __init__(self):
-        self.client = httpx.Client(
-            headers=self.HEADERS,
-            follow_redirects=True,
-            timeout=30.0,
-        )
+        self.fetcher = StealthyFetcher
 
     @abstractmethod
     def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:

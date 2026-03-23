@@ -1,5 +1,5 @@
 httpx
 fastapi
 uvicorn
-beautifulsoup4
-lxml
+httpx
+python-dotenv
