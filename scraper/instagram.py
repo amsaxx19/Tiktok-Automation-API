@@ -1,8 +1,8 @@
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 from urllib.parse import quote
-from bs4 import BeautifulSoup
+from scrapling.fetchers import AsyncStealthySession
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
@@ -10,60 +10,40 @@ from scraper.models import VideoResult
 class InstagramScraper(BaseScraper):
     platform = "instagram"
 
-    def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
+    async def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
         print(f"[Instagram] Searching for: {keyword}")
 
-        # Instagram requires login for direct access, use Google discovery
-        encoded = quote(f"site:instagram.com/reel {keyword}")
-        url = f"https://www.google.com/search?q={encoded}&num=30"
+        async with AsyncStealthySession(headless=True) as session:
+            urls = await self._search_via_hashtag(session, keyword, max_results)
 
-        resp = self.fetch_page(url)
-        if resp.status_code != 200:
-            print(f"[Instagram] Google search failed with status {resp.status_code}")
-            return []
+            # Fallback to Google if hashtag page is login-walled or empty
+            if not urls:
+                print("[Instagram] Hashtag page blocked, falling back to Google discovery...")
+                urls = await self._search_via_google(session, keyword, max_results)
 
-        soup = BeautifulSoup(resp.text, "lxml")
-        urls = []
-        seen = set()
-        for a in soup.find_all("a", href=True):
-            href = a["href"]
-            if "instagram.com" in href and ("/reel/" in href or "/p/" in href):
-                if "url?q=" in href:
-                    href = href.split("url?q=")[1].split("&")[0]
-                href = href.split("#")[0]
-                if href not in seen:
-                    seen.add(href)
-                    urls.append(href)
-            if len(urls) >= max_results:
-                break
+            print(f"[Instagram] Found {len(urls)} posts/reels, fetching details concurrently...")
 
-        print(f"[Instagram] Found {len(urls)} posts/reels, fetching details...")
-
-        results = []
-        with ThreadPoolExecutor(max_workers=min(4, max(1, len(urls)))) as pool:
-            futures = {
-                pool.submit(self._scrape_post, post_url, keyword): post_url
-                for post_url in urls
-            }
-            for future in as_completed(futures):
-                post_url = futures[future]
-                try:
-                    result = future.result()
-                    if result:
-                        results.append(result)
-                        print(f"[Instagram] ({len(results)}/{len(urls)}) @{result.author} - {result.likes} likes")
-                        if len(results) >= max_results:
-                            break
-                except Exception as e:
-                    print(f"[Instagram] Error scraping {post_url}: {e}")
+            results = []
+            tasks = [self._scrape_post(session, post_url, keyword) for post_url in urls]
+            raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in raw_results:
+                if isinstance(result, Exception):
+                    print(f"[Instagram] Error scraping video: {result}")
+                    continue
+                if result:
+                    results.append(result)
+                    print(f"[Instagram] ({len(results)}/{len(urls)}) @{result.author} - {result.likes} likes")
+                    if len(results) >= max_results:
+                        break
 
         return results
 
-    def _search_via_hashtag(self, keyword: str, max_results: int) -> list[str]:
+    async def _search_via_hashtag(self, session: AsyncStealthySession, keyword: str, max_results: int) -> list[str]:
         tag = keyword.replace(" ", "").lower()
         url = f"https://www.instagram.com/explore/tags/{quote(tag)}/"
 
-        response = self.fetch_page(
+        response = await session.fetch(
             url,
             wait_selector='a[href*="/reel/"], a[href*="/p/"]',
             timeout=15000,
@@ -86,11 +66,11 @@ class InstagramScraper(BaseScraper):
                 break
         return urls
 
-    def _search_via_google(self, keyword: str, max_results: int) -> list[str]:
+    async def _search_via_google(self, session: AsyncStealthySession, keyword: str, max_results: int) -> list[str]:
         encoded = quote(f"site:instagram.com/reel {keyword}")
         url = f"https://www.google.com/search?q={encoded}&num=30"
 
-        response = self.fetch_page(url, network_idle=True, timeout=12000)
+        response = await session.fetch(url, network_idle=True, timeout=12000)
         if response.status != 200:
             return []
 
@@ -118,8 +98,8 @@ class InstagramScraper(BaseScraper):
         except ValueError:
             return None
 
-    def _scrape_post(self, url: str, keyword: str) -> VideoResult | None:
-        response = self.fetch_page(url, wait_selector='meta[property="og:title"], meta[name="description"]', timeout=12000)
+    async def _scrape_post(self, session: AsyncStealthySession, url: str, keyword: str) -> VideoResult | None:
+        response = await session.fetch(url, wait_selector='meta[property="og:title"], meta[name="description"]', timeout=12000)
         if response.status != 200:
             return None
 
