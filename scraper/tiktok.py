@@ -1,10 +1,13 @@
 import json
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+import asyncio
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from urllib.parse import quote
+from scrapling.fetchers import AsyncStealthySession
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
+from scraper.whisper_transcribe import transcribe_tiktok_video
 
 
 class TikTokScraper(BaseScraper):
@@ -37,7 +40,7 @@ class TikTokScraper(BaseScraper):
         )
         return int(number * multiplier)
 
-    def search(
+    async def search(
         self,
         keyword: str,
         max_results: int = 20,
@@ -51,51 +54,72 @@ class TikTokScraper(BaseScraper):
         encoded = quote(keyword)
         url = f"https://www.tiktok.com/search?q={encoded}"
 
-        response = self.fetch_page(
-            url,
-            wait_selector='a[href*="/video/"]',
-            timeout=self.SEARCH_FETCH_TIMEOUT_MS,
-        )
-        if response.status != 200:
-            print(f"[TikTok] Failed with status {response.status}")
-            return []
-
-        video_links = response.css('a[href*="/video/"]')
-        urls = []
-        seen = set()
-        needs_extra_candidates = any(
-            value is not None
-            for value in (min_likes, max_likes, date_from, date_to)
-        ) or sort in {"popular", "latest", "oldest"}
-        target_count = max_results * 2 if needs_extra_candidates else max_results
-
-        for link in video_links:
-            href = link.attrib.get("href", "")
-            if "/video/" in href and href not in seen:
-                seen.add(href)
-                urls.append(href)
-            if len(urls) >= target_count:
-                break
-
-        print(f"[TikTok] Found {len(urls)} video URLs, fetching details...")
-
-        results = []
-        with ThreadPoolExecutor(max_workers=min(4, max(1, len(urls)))) as pool:
-            futures = {
-                pool.submit(self._scrape_video, video_url, keyword): video_url
-                for video_url in urls
-            }
-            for future in as_completed(futures):
-                video_url = futures[future]
+        # Setup Async Session
+        async with AsyncStealthySession(headless=True) as session:
+            # Inject authenticated TikTok session if available
+            tiktok_cookie = os.environ.get("TIKTOK_COOKIE")
+            if tiktok_cookie:
                 try:
-                    result = future.result()
-                    if result and self._passes_filters(result, min_likes, max_likes, date_from, date_to):
-                        results.append(result)
-                        print(f"[TikTok] ({len(results)}/{max_results}) @{result.author} - {result.views} views")
-                        if len(results) >= max_results:
-                            break
+                    await session.context.add_cookies([{
+                        "name": "sessionid",
+                        "value": tiktok_cookie.strip(),
+                        "domain": ".tiktok.com",
+                        "path": "/"
+                    }])
+                    print("[TikTok] Injected authenticated session cookie.")
                 except Exception as e:
-                    print(f"[TikTok] Error scraping {video_url}: {e}")
+                    print(f"[TikTok] Failed to inject cookie: {e}")
+
+            response = await session.fetch(
+                url,
+                wait_selector='a[href*="/video/"]',
+                timeout=self.SEARCH_FETCH_TIMEOUT_MS,
+            )
+            if response.status != 200:
+                print(f"[TikTok] Failed with status {response.status}")
+                return []
+
+            video_links = response.css('a[href*="/video/"]')
+            urls = []
+            seen = set()
+            needs_extra_candidates = any(
+                value is not None
+                for value in (min_likes, max_likes, date_from, date_to)
+            ) or sort in {"popular", "latest", "oldest"}
+            target_count = max_results * 2 if needs_extra_candidates else max_results
+
+            for link in video_links:
+                href = link.attrib.get("href", "")
+                if "/video/" in href and href not in seen:
+                    seen.add(href)
+                    urls.append(href)
+                if len(urls) >= target_count:
+                    break
+
+            print(f"[TikTok] Found {len(urls)} video URLs, fetching details concurrently...")
+
+            results = []
+            tasks = [self._scrape_video(session, video_url, keyword) for video_url in urls]
+            
+            # Concurrently fetch all videos in the same session
+            raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in raw_results:
+                if isinstance(result, Exception):
+                    print(f"[TikTok] Async Video Scrape Error: {result}")
+                    continue
+                if result and self._passes_filters(result, min_likes, max_likes, date_from, date_to):
+                    results.append(result)
+                    print(f"[TikTok] ({len(results)}/{max_results}) @{result.author} - {result.views} views")
+                    if len(results) >= max_results:
+                        break
+
+        # Automatically enrich results with transcripts if TikTok blocked the payload
+        needs_transcript = [r for r in results if not r.transcript]
+        if needs_transcript:
+            print(f"[TikTok/Scrapling] Auto-extracting transcripts for {len(needs_transcript)} videos...")
+            transcript_tasks = [self._enrich_transcript(r) for r in needs_transcript]
+            await asyncio.gather(*transcript_tasks, return_exceptions=True)
 
         if sort == "popular":
             results.sort(key=lambda r: r.views or 0, reverse=True)
@@ -106,7 +130,7 @@ class TikTokScraper(BaseScraper):
 
         return results
 
-    def scrape_profile(
+    async def scrape_profile(
         self,
         username: str,
         max_results: int = 30,
@@ -116,43 +140,40 @@ class TikTokScraper(BaseScraper):
         print(f"[TikTok] Scraping profile: @{username}")
         url = f"https://www.tiktok.com/@{username}"
 
-        response = self.fetch_page(
-            url,
-            wait_selector='a[href*="/video/"]',
-            timeout=self.PROFILE_FETCH_TIMEOUT_MS,
-        )
-        if response.status != 200:
-            print(f"[TikTok] Failed to load profile with status {response.status}")
-            return []
+        async with AsyncStealthySession(headless=True) as session:
+            response = await session.fetch(
+                url,
+                wait_selector='a[href*="/video/"]',
+                timeout=self.PROFILE_FETCH_TIMEOUT_MS,
+            )
+            if response.status != 200:
+                print(f"[TikTok] Failed to load profile with status {response.status}")
+                return []
 
-        video_links = response.css('a[href*="/video/"]')
-        urls = []
-        seen = set()
-        for link in video_links:
-            href = link.attrib.get("href", "")
-            if "/video/" in href and href not in seen:
-                seen.add(href)
-                urls.append(href)
-            if len(urls) >= max_results:
-                break
+            video_links = response.css('a[href*="/video/"]')
+            urls = []
+            seen = set()
+            for link in video_links:
+                href = link.attrib.get("href", "")
+                if "/video/" in href and href not in seen:
+                    seen.add(href)
+                    urls.append(href)
+                if len(urls) >= max_results:
+                    break
 
-        print(f"[TikTok] Found {len(urls)} videos on profile, fetching details...")
+            print(f"[TikTok] Found {len(urls)} videos on profile, fetching details concurrently...")
 
-        results = []
-        with ThreadPoolExecutor(max_workers=min(4, max(1, len(urls)))) as pool:
-            futures = {
-                pool.submit(self._scrape_video, video_url, f"@{username}"): video_url
-                for video_url in urls
-            }
-            for future in as_completed(futures):
-                video_url = futures[future]
-                try:
-                    result = future.result()
-                    if result:
-                        results.append(result)
-                        print(f"[TikTok] ({len(results)}/{len(urls)}) {result.views} views")
-                except Exception as e:
-                    print(f"[TikTok] Error scraping {video_url}: {e}")
+            results = []
+            tasks = [self._scrape_video(session, video_url, f"@{username}") for video_url in urls]
+            raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in raw_results:
+                if isinstance(result, Exception):
+                    print(f"[TikTok] Async Video Scrape Error: {result}")
+                    continue
+                if result:
+                    results.append(result)
+                    print(f"[TikTok] ({len(results)}/{len(urls)}) {result.views} views")
 
         if sort == "popular":
             results.sort(key=lambda r: r.views or 0, reverse=True)
@@ -161,75 +182,76 @@ class TikTokScraper(BaseScraper):
 
         return results
 
-    def scrape_comments(self, video_url: str, max_comments: int = 50) -> list[dict]:
+    async def scrape_comments(self, video_url: str, max_comments: int = 50) -> list[dict]:
         print(f"[TikTok] Scraping comments from: {video_url}")
-        api_comments = self._scrape_comments_via_api(video_url, max_comments)
-        if api_comments:
-            print(f"[TikTok] Extracted {len(api_comments)} comments via API")
-            return api_comments
+        
+        async with AsyncStealthySession(headless=True) as session:
+            api_comments = await self._scrape_comments_via_api(session, video_url, max_comments)
+            if api_comments:
+                print(f"[TikTok] Extracted {len(api_comments)} comments via API")
+                return api_comments
 
-        response = self.fetch_page(video_url, network_idle=True, timeout=30000)
-        if response.status != 200:
-            return []
+            response = await session.fetch(video_url, network_idle=True, timeout=30000)
+            if response.status != 200:
+                return []
 
-        scripts = response.css('script#__UNIVERSAL_DATA_FOR_REHYDRATION__')
-        if not scripts:
-            return []
+            scripts = response.css('script#__UNIVERSAL_DATA_FOR_REHYDRATION__')
+            if not scripts:
+                return []
 
-        data = json.loads(scripts[0].text)
-        comment_data = data.get("__DEFAULT_SCOPE__", {}).get("webapp.video-detail", {})
-        comments_list = comment_data.get("commentList", [])
+            data = json.loads(scripts[0].text)
+            comment_data = data.get("__DEFAULT_SCOPE__", {}).get("webapp.video-detail", {})
+            comments_list = comment_data.get("commentList", [])
 
-        comments = []
-        for c in comments_list[:max_comments]:
-            comments.append({
-                "user": c.get("user", {}).get("uniqueId", ""),
-                "nickname": c.get("user", {}).get("nickname", ""),
-                "text": c.get("text", ""),
-                "likes": c.get("diggCount", 0),
-                "replies": c.get("replyCommentTotal", 0),
-                "create_time": c.get("createTime", ""),
-            })
+            comments = []
+            for c in comments_list[:max_comments]:
+                comments.append({
+                    "user": c.get("user", {}).get("uniqueId", ""),
+                    "nickname": c.get("user", {}).get("nickname", ""),
+                    "text": c.get("text", ""),
+                    "likes": c.get("diggCount", 0),
+                    "replies": c.get("replyCommentTotal", 0),
+                    "create_time": c.get("createTime", ""),
+                })
 
-        # If comments weren't in hydration data, try DOM extraction
-        if not comments:
-            comment_els = response.css('div[class*="CommentItem"], div[data-e2e="comment-level-1"]')
-            for el in comment_els[:max_comments]:
-                text_els = el.css('p[data-e2e="comment-level-1"] span, span[data-e2e="comment-level-1"]')
-                user_els = el.css('a[data-e2e="comment-username-1"], span[data-e2e="comment-username-1"]')
-                text = text_els[0].text if text_els else ""
-                user = user_els[0].text if user_els else ""
-                if text:
-                    comments.append({"user": user, "text": text, "likes": 0, "replies": 0})
+            if not comments:
+                comment_els = response.css('div[class*="CommentItem"], div[data-e2e="comment-level-1"]')
+                for el in comment_els[:max_comments]:
+                    text_els = el.css('p[data-e2e="comment-level-1"] span, span[data-e2e="comment-level-1"]')
+                    user_els = el.css('a[data-e2e="comment-username-1"], span[data-e2e="comment-username-1"]')
+                    text = text_els[0].text if text_els else ""
+                    user = user_els[0].text if user_els else ""
+                    if text:
+                        comments.append({"user": user, "text": text, "likes": 0, "replies": 0})
 
-        print(f"[TikTok] Extracted {len(comments)} comments")
-        return comments
+            print(f"[TikTok] Extracted {len(comments)} comments")
+            return comments
 
-    def _scrape_comments_via_api(self, video_url: str, max_comments: int) -> list[dict]:
+    async def _scrape_comments_via_api(self, session: AsyncStealthySession, video_url: str, max_comments: int) -> list[dict]:
         comment_api_urls: list[str] = []
         extracted_comments: list[dict] = []
 
-        def page_action(page):
+        async def page_action(page):
             def on_response(resp):
                 if "/api/comment/list/" in resp.url and resp.url not in comment_api_urls:
                     comment_api_urls.append(resp.url)
 
             page.on("response", on_response)
             for attempt in range(2):
-                page.wait_for_timeout(3000)
+                await page.wait_for_timeout(3000)
                 try:
-                    page.get_by_text("Comments").click(timeout=2000, force=True)
+                    await page.get_by_text("Comments").click(timeout=2000, force=True)
                 except Exception:
                     pass
-                page.mouse.wheel(0, 2500)
+                await page.mouse.wheel(0, 2500)
                 for _ in range(4):
                     if comment_api_urls:
                         break
-                    page.wait_for_timeout(1500)
+                    await page.wait_for_timeout(1500)
                 if comment_api_urls:
                     break
                 try:
-                    page.reload(wait_until="load")
+                    await page.reload(wait_until="load")
                 except Exception:
                     pass
 
@@ -240,7 +262,7 @@ class TikTokScraper(BaseScraper):
             seen_ids = set()
 
             while next_url and len(extracted_comments) < max_comments:
-                payload = page.evaluate(
+                payload = await page.evaluate(
                     """async (commentUrl) => {
                       const resp = await fetch(commentUrl, { credentials: 'include' });
                       const text = await resp.text();
@@ -278,7 +300,7 @@ class TikTokScraper(BaseScraper):
                     break
                 next_url = self._update_comment_api_cursor(next_url, cursor)
 
-        self.fetch_page(video_url, timeout=20000, wait=0, page_action=page_action)
+        await session.fetch(video_url, timeout=20000, wait=0, page_action=page_action)
         return extracted_comments[:max_comments]
 
     @staticmethod
@@ -290,30 +312,31 @@ class TikTokScraper(BaseScraper):
         new_query = urlencode(query, doseq=True)
         return urlunparse(parsed._replace(query=new_query))
 
-    def get_video_comment_count(self, video_url: str) -> int | None:
-        response = self.fetch_page(video_url, network_idle=True, timeout=20000)
-        if response.status != 200:
-            return None
+    async def get_video_comment_count(self, video_url: str) -> int | None:
+        async with AsyncStealthySession(headless=True) as session:
+            response = await session.fetch(video_url, network_idle=True, timeout=20000)
+            if response.status != 200:
+                return None
 
-        scripts = response.css('script#__UNIVERSAL_DATA_FOR_REHYDRATION__')
-        if not scripts:
-            return None
+            scripts = response.css('script#__UNIVERSAL_DATA_FOR_REHYDRATION__')
+            if not scripts:
+                return None
 
-        try:
-            data = json.loads(scripts[0].text)
-        except json.JSONDecodeError:
-            return None
+            try:
+                data = json.loads(scripts[0].text)
+            except json.JSONDecodeError:
+                return None
 
-        item = (
-            data.get("__DEFAULT_SCOPE__", {})
-            .get("webapp.video-detail", {})
-            .get("itemInfo", {})
-            .get("itemStruct", {})
-        )
-        return self._parse_int(item.get("stats", {}).get("commentCount"))
+            item = (
+                data.get("__DEFAULT_SCOPE__", {})
+                .get("webapp.video-detail", {})
+                .get("itemInfo", {})
+                .get("itemStruct", {})
+            )
+            return self._parse_int(item.get("stats", {}).get("commentCount"))
 
-    def _scrape_video(self, url: str, keyword: str) -> VideoResult | None:
-        response = self.fetch_page(
+    async def _scrape_video(self, session: AsyncStealthySession, url: str, keyword: str) -> VideoResult | None:
+        response = await session.fetch(
             url,
             wait_selector='script#__UNIVERSAL_DATA_FOR_REHYDRATION__',
             timeout=self.VIDEO_FETCH_TIMEOUT_MS,
@@ -405,6 +428,18 @@ class TikTokScraper(BaseScraper):
             thumbnail=thumbnail,
             hashtags=re.findall(r"#(\w+)", description),
         )
+
+    async def _enrich_transcript(self, result: VideoResult) -> None:
+        """Fallback transcript extractor when itemStruct is strictly blocked."""
+        try:
+            transcript = await transcribe_tiktok_video(
+                result.video_url, timeout_ms=20000
+            )
+            if transcript:
+                result.transcript = transcript
+                result.transcript_source = "scrapling_auto"
+        except Exception as e:
+            print(f"[TikTok] Auto-transcript error for {result.video_url}: {e}")
 
     @classmethod
     def _extract_transcript(cls, item: dict) -> str:

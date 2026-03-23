@@ -5,9 +5,7 @@ import json
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from functools import partial
 
 import httpx
 from pathlib import Path
@@ -25,9 +23,8 @@ from scraper.models import save_results
 
 load_dotenv()
 
-app = FastAPI(title="Social Media Scraper")
-executor = ThreadPoolExecutor(max_workers=5)
-SCRAPE_TIMEOUT_SECONDS = int(os.getenv("SCRAPE_TIMEOUT_SECONDS", "45"))
+app = FastAPI(title="Sinyal - Content Intelligence")
+SCRAPE_TIMEOUT_SECONDS = int(os.getenv("SCRAPE_TIMEOUT_SECONDS", "120"))
 OUTPUT_DIR = Path("output").resolve()
 PROFILE_CACHE_TTL_SECONDS = int(os.getenv("PROFILE_CACHE_TTL_SECONDS", "900"))
 SEARCH_CACHE_TTL_SECONDS = int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "900"))
@@ -61,9 +58,9 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "img-src 'self' data: https:; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; "
         "font-src 'self' https://fonts.gstatic.com data:; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; "
         "connect-src 'self' https:; "
         "frame-ancestors 'none'; "
         "base-uri 'self';"
@@ -83,50 +80,99 @@ SCRAPERS = {
 }
 
 PLAN_CATALOG = {
-    "ringan": {
-        "name": "Paket Ringan",
-        "price_idr": 59_000,
-        "tagline": "Buat mulai rutin tanpa berat di biaya.",
+    "free": {
+        "name": "Free",
+        "price_idr": 0,
+        "tagline": "Mulai riset konten viral tanpa biaya.",
         "limits": [
-            "30 pencarian per bulan",
-            "10 cek profil",
-            "10 tarik komentar",
+            "3 pencarian per hari",
+            "TikTok saja",
+            "Watermark di export",
+        ],
+        "cta": "Mulai Gratis",
+        "env_key": "",
+        "accent": "muted",
+        "daily_search_limit": 3,
+        "monthly_search_limit": 0,
+        "monthly_profile_limit": 0,
+        "monthly_comment_limit": 0,
+        "monthly_transcript_limit": 0,
+        "allowed_platforms": ["tiktok"],
+        "watermark_exports": True,
+        "billing_interval": "free",
+    },
+    "starter": {
+        "name": "Starter",
+        "price_idr": 49_000,
+        "tagline": "Riset konten harian tanpa batas pikiran.",
+        "limits": [
+            "30 pencarian per hari",
+            "TikTok + Instagram",
+            "20 cek profil per bulan",
+            "20 tarik komentar per bulan",
             "10 transkrip video",
         ],
-        "cta": "Mulai Paket Ringan",
-        "env_key": "MAYAR_URL_RINGAN",
+        "cta": "Ambil Starter",
+        "env_key": "MAYAR_URL_STARTER",
         "accent": "sun",
+        "daily_search_limit": 30,
+        "monthly_search_limit": 0,
+        "monthly_profile_limit": 20,
+        "monthly_comment_limit": 20,
+        "monthly_transcript_limit": 10,
+        "allowed_platforms": ["tiktok", "instagram"],
+        "watermark_exports": False,
+        "billing_interval": "monthly",
     },
-    "tumbuh": {
-        "name": "Paket Tumbuh",
+    "pro": {
+        "name": "Pro",
         "price_idr": 99_000,
-        "tagline": "Pilihan paling pas buat pemakaian rutin.",
+        "tagline": "Akses penuh ke semua platform dan fitur.",
         "limits": [
-            "120 pencarian per bulan",
-            "40 cek profil",
-            "40 tarik komentar",
-            "40 transkrip video",
+            "Pencarian unlimited",
+            "Semua platform (TikTok, IG, X, Facebook)",
+            "Unlimited profil & komentar",
+            "Unlimited transkrip",
+            "Hook & CTA analysis",
         ],
-        "cta": "Ambil Paket Tumbuh",
-        "env_key": "MAYAR_URL_TUMBUH",
+        "cta": "Upgrade ke Pro",
+        "env_key": "MAYAR_URL_PRO",
         "accent": "ember",
+        "daily_search_limit": 0,
+        "monthly_search_limit": 0,
+        "monthly_profile_limit": 0,
+        "monthly_comment_limit": 0,
+        "monthly_transcript_limit": 0,
+        "allowed_platforms": ["tiktok", "instagram", "youtube", "twitter", "facebook"],
+        "watermark_exports": False,
+        "billing_interval": "monthly",
     },
-    "tim": {
-        "name": "Paket Tim",
+    "lifetime": {
+        "name": "Lifetime Deal",
         "price_idr": 299_000,
-        "tagline": "Untuk workflow tim kecil yang udah serius.",
+        "tagline": "Akses Pro selama 6 bulan. Terbatas 200 slot.",
         "limits": [
-            "500 pencarian per bulan",
-            "150 cek profil",
-            "150 tarik komentar",
-            "150 transkrip video",
-            "3 anggota tim",
+            "Semua fitur Pro",
+            "Akses 6 bulan",
+            "200 slot saja — habis tidak kembali",
         ],
-        "cta": "Ambil Paket Tim",
-        "env_key": "MAYAR_URL_TIM",
+        "cta": "Ambil Lifetime Deal",
+        "env_key": "MAYAR_URL_LIFETIME",
         "accent": "forest",
+        "daily_search_limit": 0,
+        "monthly_search_limit": 0,
+        "monthly_profile_limit": 0,
+        "monthly_comment_limit": 0,
+        "monthly_transcript_limit": 0,
+        "allowed_platforms": ["tiktok", "instagram", "youtube", "twitter", "facebook"],
+        "watermark_exports": False,
+        "billing_interval": "lifetime",
     },
 }
+
+LIFETIME_SLOTS_TOTAL = int(os.getenv("LIFETIME_SLOTS_TOTAL", "200"))
+FREE_DAILY_SEARCH_LIMIT = 3
+IP_DAILY_SEARCH_COUNTS: dict[str, tuple[str, int]] = {}  # ip -> (date_str, count)
 
 
 def normalize_text(value: str | None) -> str:
@@ -513,59 +559,124 @@ def enforce_rate_limit(request: Request, bucket: str) -> JSONResponse | None:
     return None
 
 
+def _get_free_plan() -> dict:
+    return {**PLAN_CATALOG["free"], "code": "free"}
+
+
+def _check_ip_daily_search(request: Request) -> tuple[int, int]:
+    ip = get_client_ip(request)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    entry = IP_DAILY_SEARCH_COUNTS.get(ip)
+    if entry and entry[0] == today:
+        return entry[1], FREE_DAILY_SEARCH_LIMIT
+    return 0, FREE_DAILY_SEARCH_LIMIT
+
+
+def _increment_ip_daily_search(request: Request):
+    ip = get_client_ip(request)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    entry = IP_DAILY_SEARCH_COUNTS.get(ip)
+    if entry and entry[0] == today:
+        IP_DAILY_SEARCH_COUNTS[ip] = (today, entry[1] + 1)
+    else:
+        IP_DAILY_SEARCH_COUNTS[ip] = (today, 1)
+
+
 async def enforce_feature_access(request: Request, feature: str) -> tuple[dict | None, dict | None, JSONResponse | None]:
+    # If auth is not configured, allow everything (dev mode)
     if not supabase_auth_configured():
         return None, None, None
 
     user = await get_authenticated_user(request)
+
+    # --- FREE TIER: unauthenticated users ---
     if not user:
+        if feature == "search":
+            used, limit = _check_ip_daily_search(request)
+            if used >= limit:
+                return None, _get_free_plan(), JSONResponse(
+                    {
+                        "error": "Kuota pencarian gratis hari ini habis (3/hari). Daftar untuk akses lebih.",
+                        "code": "free_quota_exceeded",
+                        "feature": feature,
+                        "limit": limit,
+                        "used": used,
+                        "plan_code": "free",
+                        "upgrade_url": "/signup",
+                    },
+                    status_code=429,
+                )
+            return None, _get_free_plan(), None
+        # Non-search features require auth
         return None, None, JSONResponse(
             {"error": "Silakan login dulu untuk memakai fitur ini.", "code": "auth_required"},
             status_code=401,
         )
 
+    # --- AUTHENTICATED USERS ---
     if not supabase_rest_configured():
         return user, None, None
 
     subscription, plan = await fetch_current_subscription(user["id"])
-    if not subscription_is_active(subscription) or not plan:
-        return user, None, JSONResponse(
-            {
-                "error": "Paket aktif belum ditemukan. Pilih paket dulu untuk lanjut pakai aplikasi.",
-                "code": "subscription_required",
-                "upgrade_url": "/payment",
-            },
-            status_code=402,
-        )
 
+    # No active subscription → treat as FREE tier
+    if not subscription_is_active(subscription) or not plan:
+        plan = _get_free_plan()
+
+    # --- Daily search limit check ---
+    if feature == "search":
+        daily_limit = int(plan.get("daily_search_limit") or 0)
+        if daily_limit > 0:
+            used, _ = _check_ip_daily_search(request)
+            if used >= daily_limit:
+                return user, plan, JSONResponse(
+                    {
+                        "error": f"Kuota pencarian hari ini habis ({daily_limit}/hari). Upgrade untuk lebih banyak.",
+                        "code": "quota_exceeded",
+                        "feature": feature,
+                        "limit": daily_limit,
+                        "used": used,
+                        "plan_code": plan.get("code"),
+                        "upgrade_url": "/payment",
+                    },
+                    status_code=429,
+                )
+
+    # --- Monthly limit check for profile/comments/transcript ---
     limit_map = {
-        "search": "monthly_search_limit",
         "profile": "monthly_profile_limit",
         "comments": "monthly_comment_limit",
         "transcript": "monthly_transcript_limit",
     }
     limit_field = limit_map.get(feature)
-    if not limit_field:
-        return user, plan, None
-
-    limit_value = int(plan.get(limit_field) or 0)
-    if limit_value <= 0:
-        return user, plan, None
-
-    used = await get_usage_total(user["id"], feature, usage_period_start(subscription))
-    if used >= limit_value:
-        return user, plan, JSONResponse(
-            {
-                "error": "Kuota paket bulan ini sudah habis.",
-                "code": "quota_exceeded",
-                "feature": feature,
-                "limit": limit_value,
-                "used": used,
-                "plan_code": plan.get("code"),
-                "upgrade_url": "/payment",
-            },
-            status_code=429,
-        )
+    if limit_field:
+        limit_value = int(plan.get(limit_field) or 0)
+        if limit_value > 0:
+            used = await get_usage_total(user["id"], feature, usage_period_start(subscription))
+            if used >= limit_value:
+                return user, plan, JSONResponse(
+                    {
+                        "error": "Kuota paket bulan ini sudah habis.",
+                        "code": "quota_exceeded",
+                        "feature": feature,
+                        "limit": limit_value,
+                        "used": used,
+                        "plan_code": plan.get("code"),
+                        "upgrade_url": "/payment",
+                    },
+                    status_code=429,
+                )
+        elif limit_value == 0 and plan.get("code") == "free":
+            return user, plan, JSONResponse(
+                {
+                    "error": "Fitur ini belum tersedia di paket Free. Upgrade untuk akses.",
+                    "code": "feature_locked",
+                    "feature": feature,
+                    "plan_code": "free",
+                    "upgrade_url": "/payment",
+                },
+                status_code=402,
+            )
 
     return user, plan, None
 
@@ -2004,10 +2115,7 @@ async def mayar_webhook(request: Request, payload: dict = Body(...)):
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page(request: Request):
-    if supabase_auth_configured():
-        user = await get_authenticated_user(request)
-        if not user:
-            return RedirectResponse("/signin", status_code=302)
+    # Allow unauthenticated access for FREE tier
     return APP_HTML
 
 
@@ -2051,24 +2159,43 @@ async def search(
         min_likes,
         max_likes,
     )
+    # Increment daily search counter for IP (happens for both cached and fresh)
+    _increment_ip_daily_search(request)
+
     cached = SEARCH_CACHE.get(cache_key)
     if cached and time.time() - cached[0] < SEARCH_CACHE_TTL_SECONDS:
         return {
             **cached[1],
             "cached": True,
             "elapsed": "<1s (cached)",
+            "json_file": cached[1].get("json_file"),
+            "csv_file": cached[1].get("csv_file"),
         }
 
     platform_list = [p.strip() for p in platforms.split(",") if p.strip() in SCRAPERS]
     if not platform_list:
         return JSONResponse({"error": "No valid platforms"}, 400)
 
+    # Enforce platform restrictions per plan
+    if plan:
+        allowed = plan.get("allowed_platforms") or list(SCRAPERS.keys())
+        platform_list = [p for p in platform_list if p in allowed]
+        if not platform_list:
+            return JSONResponse(
+                {
+                    "error": f"Paket {plan.get('name', 'Free')} hanya mendukung: {', '.join(allowed)}. Upgrade untuk platform lain.",
+                    "code": "platform_restricted",
+                    "allowed_platforms": allowed,
+                    "upgrade_url": "/payment",
+                },
+                400,
+            )
+
     # Support multiple keywords separated by newlines
     keywords = [k.strip() for k in query_value.split("\n") if k.strip()]
     if not keywords:
         return JSONResponse({"error": "No keywords provided"}, 400)
 
-    loop = asyncio.get_event_loop()
     all_results = []
     start = time.time()
 
@@ -2086,21 +2213,20 @@ async def search(
             return cached_task[1]
 
         scraper = SCRAPERS[name]()
-        if name == "tiktok":
-            work = partial(
-                scraper.search,
-                keyword,
-                max_value,
-                sort=sort,
-                min_likes=min_likes,
-                max_likes=max_likes,
-            )
-        else:
-            work = partial(scraper.search, keyword, max_value)
-
         try:
+            if name == "tiktok":
+                coro = scraper.search(
+                    keyword,
+                    max_value,
+                    sort=sort,
+                    min_likes=min_likes,
+                    max_likes=max_likes,
+                )
+            else:
+                coro = scraper.search(keyword, max_value)
+
             results = await asyncio.wait_for(
-                loop.run_in_executor(executor, work),
+                coro,
                 timeout=SCRAPE_TIMEOUT_SECONDS,
             )
             PLATFORM_SEARCH_CACHE[task_cache_key] = (time.time(), results)
@@ -2148,8 +2274,9 @@ async def search(
     elapsed = time.time() - start
 
     json_file = csv_file = None
+    watermark = bool(plan and plan.get("watermark_exports"))
     if all_results:
-        json_file, csv_file = save_results(all_results, keywords[0])
+        json_file, csv_file = save_results(all_results, keywords[0], watermark=watermark)
 
     payload = {
         "keywords": keywords,
@@ -2204,13 +2331,10 @@ async def profile(
             "elapsed": "<1s (cached)",
         }
 
-    loop = asyncio.get_event_loop()
     start = time.time()
 
     scraper = TikTokScraper()
-    results = await loop.run_in_executor(
-        executor, partial(scraper.scrape_profile, username, max_value, sort)
-    )
+    results = await scraper.scrape_profile(username, max_value, sort)
     results = [enrich_result_text(result) for result in results]
     if date_range != "all":
         results = filter_results_by_date_range(results, date_range)
@@ -2339,14 +2463,9 @@ async def comments(
             "cached": True,
         }
 
-    loop = asyncio.get_event_loop()
     scraper = TikTokScraper()
-    result = await loop.run_in_executor(
-        executor, partial(scraper.scrape_comments, target_url, max_value)
-    )
-    video_comment_count = await loop.run_in_executor(
-        executor, partial(scraper.get_video_comment_count, target_url)
-    )
+    result = await scraper.scrape_comments(target_url, max_value)
+    video_comment_count = await scraper.get_video_comment_count(target_url)
     payload = {
         "url": target_url,
         "total": len(result),
@@ -2376,16 +2495,16 @@ async def download(file: str = Query(...)):
     if not requested:
         return JSONResponse({"error": "Invalid file path"}, 400)
 
+    # Clean the path and strip any leading 'output/' if present
+    # because OUTPUT_DIR is already 'output'
+    if requested.startswith("output/"):
+        requested = requested[7:]
+
     candidate = Path(requested)
-    if candidate.is_absolute():
+    if candidate.is_absolute() or ".." in candidate.parts:
         return JSONResponse({"error": "Invalid file path"}, 400)
 
-    safe_path = (Path.cwd() / candidate).resolve()
-    try:
-        safe_path.relative_to(OUTPUT_DIR)
-    except ValueError:
-        return JSONResponse({"error": "Invalid file path"}, 400)
-
+    safe_path = OUTPUT_DIR / candidate
     if not safe_path.exists() or not safe_path.is_file():
         return JSONResponse({"error": "File not found"}, 404)
 
@@ -3466,1370 +3585,651 @@ renderDemo("tren");
 APP_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sinyal - Content Intelligence Workspace</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sinyal | Intelligence Terminal</title>
+<script>
+  if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+</script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    "background":             "rgb(var(--c-bg) / <alpha-value>)",
+                    "surface":                "rgb(var(--c-bg) / <alpha-value>)",
+                    "surface-dim":            "rgb(var(--c-surface-dim) / <alpha-value>)",
+                    "sidebar":                "rgb(var(--c-sidebar) / <alpha-value>)",
+                    "surface-container-low":  "rgb(var(--c-scl) / <alpha-value>)",
+                    "surface-container":      "rgb(var(--c-sc) / <alpha-value>)",
+                    "surface-container-high": "rgb(var(--c-sch) / <alpha-value>)",
+                    "surface-container-highest":"rgb(var(--c-schh) / <alpha-value>)",
+                    "surface-container-lowest":"rgb(var(--c-sclo) / <alpha-value>)",
+                    "surface-variant":        "rgb(var(--c-sv) / <alpha-value>)",
+                    "on-surface":             "rgb(var(--c-on) / <alpha-value>)",
+                    "on-surface-variant":     "rgb(var(--c-onv) / <alpha-value>)",
+                    "primary":                "rgb(var(--c-pri) / <alpha-value>)",
+                    "primary-container":      "rgb(var(--c-pric) / <alpha-value>)",
+                    "on-primary-fixed":       "rgb(var(--c-opf) / <alpha-value>)",
+                    "on-primary-fixed-variant":"rgb(var(--c-opf) / <alpha-value>)",
+                    "on-primary-container":   "rgb(var(--c-opc) / <alpha-value>)",
+                    "outline-variant":        "rgb(var(--c-ov) / <alpha-value>)",
+                    "error":                  "rgb(var(--c-err) / <alpha-value>)",
+                    "on-error-container":     "rgb(var(--c-oec) / <alpha-value>)",
+                    "brand":                  "rgb(var(--c-brand) / <alpha-value>)",
+                    "tab-text":               "rgb(var(--c-tab) / <alpha-value>)",
+                },
+                fontFamily: {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+                },
+                borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            },
+        },
+    }
+</script>
 <style>
-:root {
-  --bg: #f3ecdf;
-  --bg-card: rgba(255,255,255,0.78);
-  --bg-card-hover: rgba(255,255,255,0.92);
-  --bg-input: rgba(255,255,255,0.72);
-  --border: rgba(79,49,27,0.12);
-  --border-hover: rgba(79,49,27,0.24);
-  --text: #1f1a17;
-  --text-secondary: #5d5349;
-  --text-muted: #8a7b6d;
-  --primary: #d9481f;
-  --primary-hover: #b53b19;
-  --primary-bg: rgba(217,72,31,0.12);
-  --accent-tiktok: #ff0050;
-  --accent-youtube: #ff0000;
-  --accent-instagram: #d946ef;
-  --accent-twitter: #1d9bf0;
-  --accent-facebook: #1877f2;
-  --success: #22c55e;
-  --radius: 18px;
-  --radius-sm: 8px;
-  --radius-lg: 28px;
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: 'IBM Plex Sans', sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(217,72,31,0.18), transparent 32%),
-    radial-gradient(circle at top right, rgba(255,178,102,0.28), transparent 28%),
-    linear-gradient(180deg, #fbf6ee 0%, #f3ecdf 52%, #efe4d2 100%);
-  color: var(--text);
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-
-/* Subtle grid background */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(79,49,27,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(79,49,27,0.03) 1px, transparent 1px);
-  background-size: 42px 42px;
-  pointer-events: none;
-  z-index: 0;
-  mask-image: linear-gradient(180deg, rgba(0,0,0,0.65), transparent 92%);
-}
-
-.app { position: relative; z-index: 1; }
-
-/* NAV */
-nav {
-  border-bottom: 1px solid rgba(79,49,27,0.08);
-  padding: 16px 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  backdrop-filter: blur(18px);
-  background: rgba(251,246,238,0.7);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.logo {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-.logo span { color: var(--primary); }
-.nav-links { display: flex; gap: 4px; }
-.nav-link {
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-  background: none;
-}
-.nav-link:hover, .nav-link.active { color: var(--text); background: rgba(255,255,255,0.72); }
-
-/* HERO */
-.hero {
-  text-align: center;
-  padding: 76px 32px 40px;
-  max-width: 920px;
-  margin: 0 auto;
-}
-.hero-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(79,49,27,0.1);
-  background: rgba(255,255,255,0.66);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 20px;
-}
-.hero h1 {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 58px;
-  font-weight: 700;
-  letter-spacing: -0.06em;
-  line-height: 1;
-  margin-bottom: 18px;
-}
-.hero h1 .gradient {
-  background: linear-gradient(135deg, #d9481f, #f97316, #f59e0b);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.hero p {
-  color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1.7;
-  max-width: 720px;
-  margin: 0 auto;
-}
-.hero-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 28px;
-}
-.hero-metric {
-  padding: 18px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.72);
-  border: 1px solid rgba(79,49,27,0.08);
-  text-align: left;
-}
-.signal-tabs {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 18px;
-}
-.signal-tab {
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(79,49,27,0.08);
-  background: rgba(255,255,255,0.74);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-.overview-grid {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  gap: 14px;
-  margin-bottom: 18px;
-}
-.overview-card {
-  background: linear-gradient(180deg, rgba(26,18,16,0.94), rgba(40,28,23,0.92));
-  color: #f7efe8;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 22px;
-  padding: 18px;
-  box-shadow: 0 18px 44px rgba(17, 10, 7, 0.26);
-}
-.overview-card strong {
-  display: block;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 22px;
-  margin-bottom: 8px;
-}
-.overview-card p {
-  color: rgba(255,255,255,0.72);
-  font-size: 13px;
-  line-height: 1.55;
-}
-.overview-card .mini-label {
-  display: inline-block;
-  margin-bottom: 10px;
-  color: rgba(255,255,255,0.66);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.hero-metric strong {
-  display: block;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 24px;
-  margin-bottom: 4px;
-}
-.hero-metric span { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
-
-/* MAIN CONTAINER */
-.main { max-width: 1120px; margin: 0 auto; padding: 0 32px 72px; }
-.account-strip {
-  max-width: 1120px;
-  margin: -10px auto 22px;
-  padding: 0 32px;
-}
-.account-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  background: rgba(255,255,255,0.82);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-  box-shadow: 0 18px 40px rgba(107, 74, 47, 0.08);
-}
-.account-copy strong {
-  display: block;
-  font-size: 16px;
-  margin-bottom: 4px;
-}
-.account-copy p {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.account-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-.usage-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-.usage-chip {
-  border-radius: 999px;
-  padding: 8px 12px;
-  background: rgba(217,72,31,0.08);
-  border: 1px solid rgba(217,72,31,0.12);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-.usage-chip strong {
-  color: var(--primary-hover);
-  margin-right: 6px;
-}
-.banner-inline {
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(217,72,31,0.12);
-  background: rgba(217,72,31,0.08);
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.banner-inline strong {
-  color: var(--text);
-}
-.hidden { display: none !important; }
-
-/* TABS / PAGES */
-.page { display: none; }
-.page.active { display: block; }
-
-/* SECTION CARD */
-.section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 18px 40px rgba(107, 74, 47, 0.08);
-  border-radius: var(--radius-lg);
-  padding: 28px;
-  margin-bottom: 20px;
-}
-.section-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.section-title .icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-/* FORM ELEMENTS */
-.form-group { margin-bottom: 16px; }
-.form-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
-}
-.form-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-
-input[type="text"], input[type="number"], textarea, select {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text);
-  font-size: 14px;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s;
-}
-input:focus, textarea:focus, select:focus { border-color: var(--primary); }
-textarea { resize: vertical; min-height: 100px; }
-select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2371717a' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
-
-/* CHIPS / TOGGLES */
-.chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
-.chip {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  border-radius: 100px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.chip:hover { border-color: var(--border-hover); }
-.chip.active { border-color: var(--primary); background: var(--primary-bg); color: var(--primary-hover); }
-.chip .dot { width: 8px; height: 8px; border-radius: 50%; }
-.quick-picks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
-}
-.quick-pick {
-  border: 1px dashed rgba(79,49,27,0.18);
-  background: rgba(255,255,255,0.55);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 10px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.quick-pick:hover {
-  border-color: var(--primary);
-  color: var(--primary-hover);
-  transform: translateY(-1px);
-}
-
-/* INLINE GRID */
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-@media (max-width: 640px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
-
-/* BUTTON */
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.btn-primary {
-  background: var(--primary);
-  color: white;
-  width: 100%;
-  justify-content: center;
-  padding: 16px;
-  font-size: 15px;
-  border-radius: var(--radius);
-  box-shadow: 0 16px 30px rgba(217,72,31,0.22);
-}
-.btn-primary:hover { background: var(--primary-hover); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary {
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-.btn-secondary:hover { background: var(--bg-card-hover); border-color: var(--border-hover); }
-
-/* STATUS BAR */
-.status-bar {
-  padding: 14px 20px;
-  border-radius: var(--radius);
-  background: rgba(255,255,255,0.75);
-  border: 1px solid var(--border);
-  margin-bottom: 20px;
-  display: none;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-}
-.status-bar.active { display: flex; }
-.spinner {
-  width: 18px; height: 18px;
-  border: 2px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  flex-shrink: 0;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* RESULTS */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.stat-card {
-  background: rgba(255,255,255,0.8);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 20px;
-  text-align: center;
-}
-.stat-card .value { font-size: 28px; font-weight: 700; }
-.stat-card .label { font-size: 12px; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-card.tiktok .value { color: var(--accent-tiktok); }
-.stat-card.youtube .value { color: var(--accent-youtube); }
-.stat-card.instagram .value { color: var(--accent-instagram); }
-.stat-card.twitter .value { color: var(--accent-twitter); }
-.stat-card.facebook .value { color: var(--accent-facebook); }
-
-.download-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-.download-btn {
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: none;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  background: var(--bg-card);
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.download-btn:hover { border-color: var(--primary); color: var(--primary-hover); }
-
-/* RESULT CARDS */
-.result-list { display: flex; flex-direction: column; gap: 8px; }
-.result-card {
-  background: rgba(255,255,255,0.82);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  transition: all 0.15s;
-  cursor: default;
-}
-.result-card:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
-.result-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.badge {
-  padding: 3px 10px;
-  border-radius: 100px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.badge.tiktok { background: rgba(255,0,80,0.1); color: var(--accent-tiktok); }
-.badge.youtube { background: rgba(255,0,0,0.1); color: var(--accent-youtube); }
-.badge.instagram { background: rgba(224,64,251,0.1); color: var(--accent-instagram); }
-.badge.twitter { background: rgba(29,155,240,0.1); color: var(--accent-twitter); }
-.badge.facebook { background: rgba(24,119,242,0.1); color: var(--accent-facebook); }
-.result-title {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 4px;
-  line-height: 1.4;
-}
-.result-title a { color: var(--text); text-decoration: none; }
-.result-title a:hover { color: var(--primary-hover); }
-.result-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
-.result-copy-grid {
-  display: grid;
-  gap: 10px;
-  margin: 10px 0 12px;
-}
-.result-copy-block {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(217,72,31,0.06);
-  border: 1px solid rgba(217,72,31,0.08);
-}
-.result-copy-block.alt {
-  background: rgba(255,255,255,0.78);
-}
-.result-copy-block strong {
-  color: var(--text);
-  display: block;
-  margin-bottom: 4px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.result-copy-block p {
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.result-copy-block.empty p {
-  color: var(--text-muted);
-}
-.result-transcript {
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: rgba(217,72,31,0.06);
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-  border: 1px solid rgba(217,72,31,0.08);
-}
-.result-transcript strong {
-  color: var(--text);
-  display: block;
-  margin-bottom: 4px;
-}
-.result-copy-meta {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-.copy-chip {
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.82);
-  border: 1px solid rgba(79,49,27,0.08);
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-.result-stats {
-  display: flex;
-  gap: 20px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  flex-wrap: wrap;
-}
-.result-stats .stat { display: flex; align-items: center; gap: 4px; }
-.badge.sponsored { background: rgba(31,41,55,0.08); color: #5b4633; }
-.badge.analytics { background: rgba(217,72,31,0.12); color: var(--primary); }
-.result-badges {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.profile-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
-  gap: 20px;
-  align-items: start;
-}
-.profile-main { min-width: 0; }
-.analytics-rail {
-  position: sticky;
-  top: 92px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.analytics-panel {
-  background: rgba(255,255,255,0.88);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  padding: 18px;
-  box-shadow: 0 18px 40px rgba(107, 74, 47, 0.08);
-}
-.analytics-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 14px;
-}
-.analytics-header h3 {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 20px;
-  letter-spacing: -0.04em;
-}
-.analytics-header p {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-.analytics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.analytics-metric {
-  border: 1px solid rgba(79,49,27,0.08);
-  border-radius: 18px;
-  padding: 14px;
-  background: rgba(255,255,255,0.72);
-}
-.analytics-metric strong {
-  display: block;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 22px;
-  margin-bottom: 2px;
-}
-.analytics-metric span {
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-.analytics-split {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.analytics-split-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 0;
-  border-top: 1px solid rgba(79,49,27,0.08);
-}
-.analytics-split-row:first-child { border-top: none; padding-top: 0; }
-.analytics-split-row strong {
-  display: block;
-  font-size: 14px;
-}
-.analytics-split-row span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-.analytics-empty {
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.filter-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-.filter-summary {
-  color: var(--text-muted);
-  font-size: 13px;
-  margin-bottom: 12px;
-}
-
-/* COMMENT CARDS */
-.comment-card {
-  background: rgba(255,255,255,0.8);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px 18px;
-  margin-bottom: 8px;
-}
-.comment-user { font-size: 13px; font-weight: 600; color: var(--primary-hover); margin-bottom: 4px; }
-.comment-text { font-size: 14px; line-height: 1.5; }
-.comment-meta { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-@media (max-width: 800px) {
-  .hero { padding-top: 54px; }
-  .hero h1 { font-size: 42px; }
-  .hero-metrics { grid-template-columns: 1fr; }
-  .overview-grid { grid-template-columns: 1fr; }
-  nav { padding: 14px 20px; flex-direction: column; align-items: stretch; gap: 12px; }
-  .nav-links { width: 100%; overflow-x: auto; padding-bottom: 2px; }
-  .main { padding: 0 20px 48px; }
-  .profile-shell { grid-template-columns: 1fr; }
-  .analytics-rail { position: static; }
-  .filter-bar { grid-template-columns: 1fr; }
-  .download-row { flex-direction: column; }
-  .download-btn { width: 100%; justify-content: center; }
-}
-
-@media (max-width: 640px) {
-  .hero { padding: 36px 20px 18px; }
-  .hero h1 { font-size: 34px; line-height: 1.08; }
-  .hero p { font-size: 15px; }
-  .section { padding: 20px; border-radius: 22px; }
-  textarea { min-height: 128px; }
-  .quick-picks { gap: 8px; }
-  .quick-pick { width: 100%; justify-content: center; text-align: center; }
-  .result-card { padding: 14px 16px; }
-  .result-top { align-items: flex-start; gap: 8px; flex-direction: column; }
-}
+    /* ===== LIGHT MODE (default) ===== */
+    :root {
+        --c-bg: 252 249 244;
+        --c-sidebar: 255 255 255;
+        --c-surface-dim: 238 234 226;
+        --c-scl: 246 242 236;
+        --c-sc: 240 236 228;
+        --c-sch: 232 227 219;
+        --c-schh: 224 219 211;
+        --c-sclo: 255 255 255;
+        --c-sv: 232 227 219;
+        --c-on: 28 26 22;
+        --c-onv: 107 94 82;
+        --c-pri: 160 78 0;
+        --c-pric: 230 126 34;
+        --c-opf: 255 255 255;
+        --c-opc: 110 52 0;
+        --c-ov: 212 198 184;
+        --c-err: 186 26 26;
+        --c-oec: 65 0 2;
+        --c-brand: 210 105 15;
+        --c-tab: 135 124 114;
+        --scrollbar-track: #f4f0ea;
+        --scrollbar-thumb: #d4c6b8;
+        --input-border: rgba(180,160,140,0.25);
+        --active-tab-bg: rgba(230,126,34,0.07);
+        --sidebar-shadow: 2px 0 8px rgba(0,0,0,0.04);
+        --card-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        --focus-ring: rgba(160,78,0,0.4);
+    }
+    /* ===== DARK MODE ===== */
+    .dark {
+        --c-bg: 17 19 24;
+        --c-sidebar: 12 14 18;
+        --c-surface-dim: 17 19 24;
+        --c-scl: 26 28 32;
+        --c-sc: 30 32 36;
+        --c-sch: 40 42 46;
+        --c-schh: 51 53 57;
+        --c-sclo: 12 14 18;
+        --c-sv: 51 53 57;
+        --c-on: 226 226 232;
+        --c-onv: 220 193 177;
+        --c-pri: 255 183 131;
+        --c-pric: 230 126 34;
+        --c-opf: 113 55 0;
+        --c-opc: 80 38 0;
+        --c-ov: 86 67 55;
+        --c-err: 255 180 171;
+        --c-oec: 255 218 214;
+        --c-brand: 255 183 131;
+        --c-tab: 148 148 148;
+        --scrollbar-track: #0c0e12;
+        --scrollbar-thumb: #333539;
+        --input-border: rgba(86,67,55,0.2);
+        --active-tab-bg: rgba(230,126,34,0.1);
+        --sidebar-shadow: 2px 0 12px rgba(0,0,0,0.3);
+        --card-shadow: none;
+        --focus-ring: rgba(255,183,131,0.5);
+    }
+    .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        vertical-align: middle;
+    }
+    body {
+        background-color: rgb(var(--c-bg));
+        color: rgb(var(--c-on));
+        font-family: 'Inter', sans-serif;
+        transition: background-color 0.35s ease, color 0.35s ease;
+    }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 10px; }
+    .tab-btn.active {
+        background-color: var(--active-tab-bg);
+        color: rgb(var(--c-pri));
+        border-right-width: 4px;
+        border-color: rgb(var(--c-pric));
+    }
+    .ds-input {
+        background-color: rgb(var(--c-sclo));
+        border: 1px solid var(--input-border);
+        color: rgb(var(--c-on));
+        border-radius: 0.75rem;
+        font-size: 0.875rem;
+        transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+    }
+    .ds-input:focus {
+        outline: none;
+        border-color: var(--focus-ring);
+        box-shadow: 0 0 0 1px var(--focus-ring);
+    }
+    .theme-transition, aside, main, header, .tab-btn, .ds-input {
+        transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+    }
 </style>
 </head>
-<body>
-<div class="app">
+<body class="bg-background text-on-surface custom-scrollbar">
 
-<nav>
-  <div class="logo">Sin<span>yal</span></div>
-  <div class="nav-links">
-    <button class="nav-link active" onclick="switchPage('search', this)">Riset</button>
-    <button class="nav-link" onclick="switchPage('profile', this)">Profil</button>
-    <button class="nav-link" onclick="switchPage('comments', this)">Komentar</button>
-  </div>
-</nav>
-
-<div class="hero">
-  <div class="hero-kicker">Content Intelligence untuk Creator Indonesia</div>
-  <h1>Bongkar <span class="gradient">pola konten yang jalan</span>.</h1>
-  <p>Riset hook, caption, transcript, komentar, dan pola performa konten publik dari TikTok, YouTube, Instagram, X, dan Facebook dalam satu workspace yang enak dipakai.</p>
-  <div class="hero-metrics">
-    <div class="hero-metric"><strong>Hook & caption</strong><span>Lihat opening line, caption, dan angle yang paling sering dipakai tanpa buka banyak tab.</span></div>
-    <div class="hero-metric"><strong>Signals, bukan gimmick</strong><span>Fokus ke pola konten publik yang benar-benar kelihatan, bukan angka estimasi yang ngawang.</span></div>
-    <div class="hero-metric"><strong>Siap dipakai tim</strong><span>Ekspor hasil riset dengan cepat buat creator, affiliate marketer, atau tim konten.</span></div>
-  </div>
-  <div class="signal-tabs">
-    <div class="signal-tab">Hooks</div>
-    <div class="signal-tab">Captions</div>
-    <div class="signal-tab">Comments</div>
-    <div class="signal-tab">Transcripts</div>
-  </div>
-</div>
-
-<div class="main">
-  <div class="overview-grid">
-    <div class="overview-card">
-      <span class="mini-label">Trending signals</span>
-      <strong>Top hook patterns lagi ngumpul di satu layar</strong>
-      <p>Lihat pembuka yang paling sering dipakai, caption yang berulang, dan angle yang lagi naik tanpa buka banyak tab.</p>
-    </div>
-    <div class="overview-card">
-      <span class="mini-label">Comments intel</span>
-      <strong>Bahasa pasar lebih kebaca</strong>
-      <p>Cari pertanyaan yang berulang, pain point yang muncul, dan komentar yang bisa dipakai buat ide konten berikutnya.</p>
-    </div>
-    <div class="overview-card">
-      <span class="mini-label">Transcripts</span>
-      <strong>Isi video lebih cepat dipahami</strong>
-      <p>Nggak perlu nonton semua video satu-satu. Fokus ke bagian yang paling penting buat riset.</p>
-    </div>
-  </div>
-
-<!-- ==================== SEARCH PAGE ==================== -->
-<div class="page active" id="page-search">
-  <div class="banner-inline hidden" id="searchBanner"></div>
-
-  <div class="section">
-    <div class="section-title"><div class="icon" style="background:var(--primary-bg)">S</div> Search Workspace</div>
-    <div class="form-group">
-      <label class="form-label">Cari topik, brand, masalah, atau creator</label>
-      <textarea id="keywords" placeholder="Contoh:&#10;skincare viral&#10;kopi susu literan&#10;lowongan kerja remote&#10;openai"></textarea>
-      <div class="form-hint">Bisa isi banyak keyword, satu baris satu query. Cocok buat ngetes beberapa angle sekaligus.</div>
-      <div class="quick-picks">
-        <button class="quick-pick" type="button" onclick="applyExample('skincare viral')">skincare viral</button>
-        <button class="quick-pick" type="button" onclick="applyExample('kopi susu literan')">kopi susu literan</button>
-        <button class="quick-pick" type="button" onclick="applyExample('UMKM fashion lokal')">UMKM fashion lokal</button>
-        <button class="quick-pick" type="button" onclick="applyExample('AI untuk kerja')">AI untuk kerja</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(245,158,11,0.14)">P</div> Platforms</div>
-    <div class="chip-group">
-      <div class="chip active" data-platform="tiktok" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-tiktok)"></span>TikTok</div>
-      <div class="chip active" data-platform="youtube" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-youtube)"></span>YouTube</div>
-      <div class="chip active" data-platform="instagram" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-instagram)"></span>Instagram</div>
-      <div class="chip active" data-platform="twitter" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-twitter)"></span>Twitter/X</div>
-      <div class="chip active" data-platform="facebook" onclick="toggleChip(this)"><span class="dot" style="background:var(--accent-facebook)"></span>Facebook</div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.14)">F</div> Ranking & Filters</div>
-    <div class="grid-3">
-      <div class="form-group">
-        <label class="form-label">Results per platform</label>
-        <input type="number" id="maxResults" value="3" min="1" max="50">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Urutkan hasil</label>
-        <select id="sortBy">
-          <option value="relevance">Paling relevan</option>
-          <option value="popular">Views tertinggi</option>
-          <option value="most_liked">Likes tertinggi</option>
-          <option value="latest">Terbaru</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Date range</label>
-        <select id="searchDateRange">
-          <option value="all">Sepanjang waktu</option>
-          <option value="7d">7 hari terakhir</option>
-          <option value="30d">30 hari terakhir</option>
-        </select>
-      </div>
-    </div>
-    <div class="grid-2">
-      <div class="form-group">
-        <label class="form-label">Min views</label>
-        <input type="number" id="minViews" placeholder="No minimum">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Max views</label>
-        <input type="number" id="maxViews" placeholder="No maximum">
-      </div>
-    </div>
-    <div class="grid-2">
-      <div class="form-group">
-        <label class="form-label">Min likes</label>
-        <input type="number" id="minLikes" placeholder="No minimum">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Max likes</label>
-        <input type="number" id="maxLikes" placeholder="No maximum">
-      </div>
-    </div>
-  </div>
-
-  <button class="btn btn-primary" id="searchBtn" onclick="doSearch()">Cari Sinyal Sosial</button>
-
-  <div style="height:24px"></div>
-  <div class="status-bar" id="searchStatus"><div class="spinner"></div><span id="searchStatusText"></span></div>
-  <div id="searchStats"></div>
-  <div id="searchDownloads"></div>
-  <div id="searchResults" class="result-list"></div>
-</div>
-
-<!-- ==================== PROFILE PAGE ==================== -->
-<div class="page" id="page-profile">
-  <div class="banner-inline hidden" id="profileBanner"></div>
-
-  <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(255,0,80,0.1)">@</div> Profil TikTok</div>
-    <div class="grid-2">
-      <div class="form-group">
-        <label class="form-label">Username TikTok</label>
-        <input type="text" id="profileUsername" placeholder="username saja, tanpa @">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Max videos</label>
-        <input type="number" id="profileMax" value="10" min="1" max="50">
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Urutkan video</label>
-      <select id="profileSort">
-        <option value="latest">Terbaru</option>
-        <option value="popular">Paling populer</option>
-        <option value="oldest">Terlama</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Date range</label>
-      <select id="profileDateRange">
-        <option value="all">All time</option>
-        <option value="7d">Last 7 days</option>
-        <option value="30d">Last 30 days</option>
-      </select>
-    </div>
-  </div>
-
-  <button class="btn btn-primary" id="profileBtn" onclick="doProfile()">Buka Profil</button>
-
-  <div style="height:24px"></div>
-  <div class="status-bar" id="profileStatus"><div class="spinner"></div><span id="profileStatusText"></span></div>
-  <div class="profile-shell">
-    <div class="profile-main">
-      <div id="profileStats"></div>
-      <div id="profileDownloads"></div>
-      <div class="section">
-        <div class="section-title"><div class="icon" style="background:rgba(217,72,31,0.12)">F</div> Feed Breakdown</div>
-        <div class="filter-summary" id="profileFilterSummary">Buka profil untuk lihat pola konten, post sponsor vs organik, dan cari angle yang sering dipakai.</div>
-        <div class="filter-bar">
-          <input type="text" id="profileFeedSearch" placeholder="Cari judul atau caption konten..." oninput="applyProfileFilters()">
-          <select id="profileSponsoredFilter" onchange="applyProfileFilters()">
-            <option value="all">All posts</option>
-            <option value="organic">Organic only</option>
-            <option value="sponsored">Sponsored only</option>
-          </select>
+<div class="flex h-screen overflow-hidden">
+    <!-- SideNavBar -->
+    <aside class="fixed left-0 top-0 h-full flex flex-col p-4 z-40 bg-sidebar w-64 transition-all border-r border-outline-variant/10" style="box-shadow: var(--sidebar-shadow);">
+        <div class="mb-8 px-4 flex items-center gap-3">
+            <div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
+                <span class="material-symbols-outlined text-on-primary-fixed" data-icon="insights">insights</span>
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold text-brand font-headline tracking-tight">Sinyal</h1>
+                <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Editorial Intel</p>
+            </div>
         </div>
-        <div id="profileResults" class="result-list"></div>
-      </div>
-    </div>
-    <aside class="analytics-rail">
-      <div id="profileAnalytics" class="analytics-panel">
-        <div class="analytics-header">
-          <h3>Profile signals</h3>
-          <p>side rail</p>
+        <nav class="flex-1 space-y-1">
+            <button class="tab-btn active w-full flex items-center gap-3 text-tab-text rounded-xl px-4 py-3 font-manrope font-semibold text-sm transition-all hover:bg-surface-container-low hover:text-primary" onclick="switchTab('dashboard', this)">
+                <span class="material-symbols-outlined" data-icon="insights">insights</span>
+                <span>Intelligence</span>
+            </button>
+            <button class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all" onclick="switchTab('search', this)">
+                <span class="material-symbols-outlined" data-icon="search">search</span>
+                <span>Riset</span>
+            </button>
+            <button class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all" onclick="switchTab('profile', this)">
+                <span class="material-symbols-outlined" data-icon="movie_filter">movie_filter</span>
+                <span>Profil</span>
+            </button>
+            <button class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all" onclick="switchTab('comments', this)">
+                <span class="material-symbols-outlined" data-icon="forum">forum</span>
+                <span>Komentar</span>
+            </button>
+            <button class="w-full flex items-center gap-3 text-tab-text px-4 py-3 font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all mt-auto" onclick="window.location.href='/payment'">
+                <span class="material-symbols-outlined" data-icon="settings">settings</span>
+                <span>Billing</span>
+            </button>
+        </nav>
+        <div class="mt-8 p-4 bg-surface-container-high rounded-xl border border-outline-variant/20">
+            <p class="text-xs text-on-surface-variant mb-3">Professional analytics for the top 1% of creators.</p>
+            <button class="w-full py-2.5 bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed font-bold text-sm rounded-lg hover:shadow-[0_0_15px_rgba(230,126,34,0.3)] transition-all">
+                Upgrade to Pro
+            </button>
         </div>
-        <div class="analytics-empty">Belum ada data. Buka satu profil TikTok dulu untuk lihat sinyal konten, rata-rata performa, dan pola organik vs sponsor.</div>
-      </div>
     </aside>
-  </div>
+
+    <!-- Main Terminal Canvas -->
+    <main class="ml-64 flex-1 flex flex-col min-w-0 bg-surface-dim">
+        <header class="flex justify-between items-center w-full px-8 h-20 sticky top-0 z-50 bg-background border-b border-outline-variant/10">
+            <div class="flex items-center gap-6 flex-1 max-w-2xl">
+                <div class="relative w-full">
+                    <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+                    <input id="globalSearch" class="ds-input w-full py-3 pl-12 pr-4" placeholder="Quick find creators or hooks..." type="text"/>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-1 bg-surface-container-low p-1 rounded-full">
+                    <button onclick="toggleTheme()" class="p-2 text-on-surface-variant hover:text-primary transition-colors" title="Toggle theme">
+                        <span id="themeIcon" class="material-symbols-outlined">dark_mode</span>
+                    </button>
+                    <button class="p-2 text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">notifications</span></button>
+                    <button class="p-2 text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined">help_outline</span></button>
+                </div>
+                <div class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 font-bold text-primary border border-primary/30">A</div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <!-- DASHBOARD TAB -->
+            <section id="dashboardTab" class="tab-section">
+                <section class="mb-10">
+                    <div class="flex justify-between items-end mb-6">
+                        <div>
+                            <span class="text-primary font-bold text-xs tracking-widest uppercase mb-2 block">Global Signal Map</span>
+                            <h2 class="text-4xl font-black font-headline tracking-tighter text-on-surface">Intelligence Dashboard</h2>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="text-right">
+                                <p class="text-[10px] font-bold text-on-surface-variant uppercase">Market Sentiment</p>
+                                <p class="text-sm font-headline font-bold text-primary">Bullish +14.2%</p>
+                            </div>
+                            <div class="h-10 w-[2px] bg-outline-variant/30"></div>
+                            <div class="text-right">
+                                <p class="text-[10px] font-bold text-on-surface-variant uppercase">Active Signals</p>
+                                <p class="text-sm font-headline font-bold text-on-surface">1,402</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Bento Terminal Grid -->
+                    <div class="grid grid-cols-12 gap-4">
+                        <div class="col-span-8 bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 relative overflow-hidden h-[400px]" style="box-shadow: var(--card-shadow);">
+                            <div class="flex justify-between items-start mb-4 relative z-10">
+                                <div>
+                                    <h3 class="text-lg font-bold font-headline">Viral Velocity Tracking</h3>
+                                    <p class="text-xs text-on-surface-variant">Real-time content performance across platforms</p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <span class="px-2 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded">LIVE</span>
+                                </div>
+                            </div>
+                            <div class="absolute inset-0 top-20 flex items-end opacity-40">
+                                <div class="w-full h-full bg-gradient-to-t from-primary/20 to-transparent"></div>
+                            </div>
+                            <div class="absolute inset-0 top-24 flex items-center justify-center">
+                                <img class="w-full h-full object-cover mix-blend-overlay opacity-30" src="https://lh3.googleusercontent.com/aida-public/AB6AXuACchwIkLsq0cX0oYFtexG3ezyeZbFOOfI548UVNEYVTvQsayUaU9LyeFC-ja8SCXA2itl0pF_xUV2lKoZIyVLGkZWZGmUz3J7jTj_-HLaBF4MQGUFO20Tr37RNd2s2X-ovs_KH1EAOY7ivsEEpleObCOthVgyQu3vvSzX3sUxxl735WgdBjrXRvz7mF-7L2UXdVGwbewz4m81k1Uyqn8JGMzjf_XboDuaw7tPaKmB5FmFY7Y3wffA2x9zIqw8dDe9sdL0jO0IVHg"/>
+                                <div class="absolute bottom-10 left-10 right-10 flex justify-between">
+                                    <div class="space-y-1">
+                                        <p class="text-[10px] text-on-surface-variant font-bold uppercase">Peak Saturation</p>
+                                        <p class="text-2xl font-bold font-headline text-primary">89.4%</p>
+                                    </div>
+                                    <div class="text-right space-y-1">
+                                        <p class="text-[10px] text-on-surface-variant font-bold uppercase">Decay Start</p>
+                                        <p class="text-2xl font-bold font-headline text-on-surface">Oct 24, 2026</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-span-4 space-y-4">
+                            <div class="bg-surface-container-high rounded-xl p-5 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
+                                <div class="flex items-center gap-2 mb-4">
+                                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+                                    <h4 class="text-sm font-bold uppercase tracking-tight">Emerging Hooks</h4>
+                                </div>
+                                <ul class="space-y-3">
+                                    <li class="flex justify-between items-center group cursor-pointer">
+                                        <span class="text-xs text-on-surface group-hover:text-primary transition-colors">"I didn't think I'd..."</span>
+                                        <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-on-surface-variant">+240%</span>
+                                    </li>
+                                    <li class="flex justify-between items-center group cursor-pointer">
+                                        <span class="text-xs text-on-surface group-hover:text-primary transition-colors">Lofi Productivity Hacks</span>
+                                        <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-on-surface-variant">+118%</span>
+                                    </li>
+                                    <li class="flex justify-between items-center group cursor-pointer">
+                                        <span class="text-xs text-on-surface group-hover:text-primary transition-colors">Extreme Minimalist Vlogs</span>
+                                        <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-on-surface-variant">+94%</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="bg-surface-container-lowest rounded-xl p-5 border border-outline-variant/10 h-[212px] relative overflow-hidden group" style="box-shadow: var(--card-shadow);">
+                                <img class="absolute inset-0 w-full h-full object-cover opacity-20 grayscale group-hover:grayscale-0 transition-all duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSGXq8T1indWOeXynsfBmXbe4xILe04-bTFTPeQ3HNaIQV0T4dc--aOR9pVySZ3Mhw93aX2kW9jLhKJ3y2B_EqNCLO_5mJtUMtgKys73piNC4ylyEGavx-fyIh1u7DFtLyCSiHTFBjKSA--Id7MjQUcD_QxJJzY2Z1ngr4gH0UlO1sHMnk1lE7VqDENGhgs3Xmay5b_4Ptd7nwGvKLBZ0ZiwGpX5D6vk5sObWJaZXcRES-lJI44j1oroMmKfE8-D0GztZqqVl5lA"/>
+                                <div class="relative z-10">
+                                    <h4 class="text-sm font-bold uppercase tracking-tight mb-1">Global Reach</h4>
+                                    <p class="text-[10px] text-on-surface-variant">Top region: SEA (Indonesia)</p>
+                                </div>
+                                <div class="absolute bottom-4 right-4 bg-primary/20 backdrop-blur-md px-3 py-1 rounded-full border border-primary/30">
+                                    <span class="text-[10px] font-bold text-primary">MAP VIEW</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                <section>
+                    <div class="flex items-center justify-between mb-4 border-b border-outline-variant/10 pb-4">
+                        <div class="flex gap-6">
+                            <button class="text-sm font-bold text-primary border-b-2 border-primary pb-4 -mb-[17px]">Feed Signals</button>
+                            <button class="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors pb-4">Watchlist</button>
+                            <button class="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors pb-4">Anomalies</button>
+                        </div>
+                    </div>
+                    <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
+                        <p class="text-sm text-on-surface-variant">Gunakan navigasi "Riset" atau "Profil" di panel kiri untuk mulai memancing intelijen real-time dan menarik data konten viral.</p>
+                    </div>
+                </section>
+            </section>
+
+            <!-- SEARCH TAB -->
+            <section id="searchTab" class="tab-section hidden">
+                <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
+                    <h3 class="font-headline text-xl font-bold">Search Workspace (Intelligence Riset)</h3>
+                    <p class="mt-2 text-sm text-on-surface-variant">Cari keyword lalu analisis sinyal konten langsung di terminal.</p>
+                    <div class="mt-6 grid gap-4 lg:grid-cols-4">
+                        <textarea id="keywordInput" class="ds-input lg:col-span-2 p-3 min-h-[120px]" placeholder="Masukkan keyword...">openai</textarea>
+                        <select id="platformSelect" class="ds-input p-3">
+                            <option value="tiktok">TikTok</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="twitter">X</option>
+                            <option value="facebook">Facebook</option>
+                        </select>
+                        <select id="sortBy" class="ds-input p-3">
+                            <option value="relevance">Paling relevan</option>
+                            <option value="popular">Views tertinggi</option>
+                            <option value="most_liked">Likes tertinggi</option>
+                            <option value="latest">Terbaru</option>
+                        </select>
+                        <select id="dateRange" class="ds-input p-3">
+                            <option value="all">Sepanjang waktu</option>
+                            <option value="7d">7 hari terakhir</option>
+                            <option value="30d">30 hari terakhir</option>
+                        </select>
+                        <input id="minViews" type="number" class="ds-input p-3" placeholder="Min views" />
+                        <input id="maxViews" type="number" class="ds-input p-3" placeholder="Max views" />
+                        <input id="minLikes" type="number" class="ds-input p-3" placeholder="Min likes" />
+                        <input id="maxLikes" type="number" class="ds-input p-3" placeholder="Max likes" />
+                    </div>
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <button id="searchBtn" class="bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed rounded-xl px-5 py-3 text-sm font-bold hover:shadow-[0_0_15px_rgba(230,126,34,0.3)] transition-all">Scan Sinyal</button>
+                        <a id="jsonDownload" class="hidden rounded-xl bg-surface-container-high border border-outline-variant/20 px-5 py-3 text-sm font-bold text-on-surface hover:bg-surface-container-highest transition-all" href="#">Export JSON</a>
+                        <a id="csvDownload" class="hidden rounded-xl bg-surface-container-high border border-outline-variant/20 px-5 py-3 text-sm font-bold text-on-surface hover:bg-surface-container-highest transition-all" href="#">Export CSV</a>
+                    </div>
+                    <p id="searchMeta" class="mt-4 text-sm font-mono text-primary/80"></p>
+                    <div class="mt-8">
+                        <div id="searchResults" class="text-sm"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PROFILE TAB -->
+            <section id="profileTab" class="tab-section hidden">
+                <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+                    <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
+                        <h3 class="font-headline text-xl font-bold">Profil Surveillance</h3>
+                        <p class="mt-2 text-sm text-on-surface-variant">Analisis pola konten spesifik author TikTok.</p>
+                        <div class="mt-6 flex flex-wrap gap-3">
+                            <input id="profileInput" class="ds-input p-3 flex-1" placeholder="Masukkan username..." value="openai" />
+                            <select id="profileSort" class="ds-input p-3"><option value="latest">Terbaru</option><option value="popular">Popular</option></select>
+                            <select id="profileDateRange" class="ds-input p-3"><option value="all">Sepanjang waktu</option><option value="7d">7 hr terakhir</option></select>
+                            <button id="profileLoadBtn" class="bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed rounded-xl px-5 py-3 text-sm font-bold hover:shadow-[0_0_15px_rgba(230,126,34,0.3)] transition-all">Muat Profil</button>
+                        </div>
+                        <input id="profileFeedSearch" class="ds-input mt-4 w-full p-3" placeholder="Filter di dalam feed profil ini..." />
+                        <div class="mt-8">
+                            <div id="profileResults" class="divide-y divide-outline-variant/10 text-sm"></div>
+                        </div>
+                    </div>
+                    <div id="profileAnalytics" class="bg-surface-container-high rounded-xl p-6 border border-outline-variant/10 text-sm text-on-surface-variant flex flex-col justify-center text-center" style="box-shadow: var(--card-shadow);">
+                        <span class="material-symbols-outlined text-4xl mb-4 text-outline-variant" style="font-variation-settings:'wght' 200;">monitoring</span>
+                        Belum ada data profil.
+                    </div>
+                </div>
+            </section>
+
+            <!-- COMMENTS TAB -->
+            <section id="commentsTab" class="tab-section hidden">
+                <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+                    <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
+                        <h3 class="font-headline text-xl font-bold">Komentar Intel</h3>
+                        <p class="mt-2 text-sm text-on-surface-variant">Ambil komentar dari video TikTok untuk menemukan CTA dan respon audiens.</p>
+                        <div class="mt-6 grid gap-3 lg:grid-cols-[1fr_120px_160px]">
+                            <input id="commentsUrl" class="ds-input p-3" value="https://www.tiktok.com/@openai/video/7604654293966146829" />
+                            <input id="commentsMax" type="number" class="ds-input p-3" value="5" />
+                            <button id="commentsLoadBtn" class="bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed rounded-xl px-5 py-3 text-sm font-bold hover:shadow-[0_0_15px_rgba(230,126,34,0.3)] transition-all">Ekstrak</button>
+                        </div>
+                        <p id="commentsMeta" class="mt-4 text-sm font-mono text-primary/80"></p>
+                        <div id="commentsResults" class="mt-6 grid gap-3"></div>
+                    </div>
+                    <div class="bg-surface-container-high rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
+                        <h4 class="font-headline text-lg font-bold text-primary">Comment Intelligence Log</h4>
+                        <div class="mt-4 font-mono text-[9px] text-on-surface-variant space-y-2 bg-surface-container-lowest p-3 rounded border border-outline-variant/10">
+                            <p>&gt; Menunggu kueri URL...</p>
+                            <p>&gt; Parsing komentar dapat memakan waktu, status akan muncul disini.</p>
+                            <p class="animate-pulse">_</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Right Side Terminal Panel -->
+    <aside class="hidden xl:flex w-80 bg-sidebar border-l border-outline-variant/10 p-6 flex flex-col gap-6 overflow-y-auto custom-scrollbar" style="box-shadow: var(--sidebar-shadow);">
+        <div class="space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xs font-black uppercase tracking-widest text-on-surface-variant">Intel Summary</h3>
+                <span class="text-[10px] font-bold text-primary">AUTO-REFRESH: ON</span>
+            </div>
+            <div class="p-4 bg-surface-container-low rounded-xl border-l-4 border-primary" style="box-shadow: var(--card-shadow);">
+                <p class="text-xs font-bold mb-1 text-on-surface">Critical Divergence</p>
+                <p class="text-[11px] text-on-surface-variant leading-relaxed">
+                    TikTok engagement for <span class="text-on-surface font-bold">#FinanceTok</span> has dropped 22% in the last 4 hours. Market is shifting toward "Long-form authenticity."
+                </p>
+            </div>
+        </div>
+        <div class="space-y-4">
+            <h3 class="text-xs font-black uppercase tracking-widest text-on-surface-variant">Top Performers</h3>
+            <div class="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer group">
+                <img class="w-10 h-10 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAX8lcs-cmEbZYFsCyZh-NtHPOTePlFHRVjhKGEWLSq-bCGyKrMZFeYuk8MwmRrRMCny6MHWJx-kpOFdrKXaZj2hjW3fmdCMB08FYPvgzlYeGRD3q35OT35zwnO7KDvalOAP_l-9_RAnIYuX3RIwiSSPqkno7EKsiQkQ_Px_kUXlBXy_j8I2-aRva9VlwSF-Ly994P0v5axqx3KiewsQGclaNDv-mnGFKScLwbMBA2xV1R7qBgVLjD3GBaK4MKsxoJU7km7kBYYvw" />
+                <div>
+                    <p class="text-xs font-bold text-on-surface">Alex Volkov</p>
+                    <p class="text-[10px] text-on-surface-variant">Tech Insight &bull; 2.4M Subs</p>
+                </div>
+                <span class="material-symbols-outlined ml-auto text-primary text-sm">trending_up</span>
+            </div>
+            <div class="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer group">
+                <img class="w-10 h-10 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-nDLRV8bp-PWwBGOvkcGna8RoZAoXg76refLz_Oogvbm5gBNAvrJHKmt72GIENQ-mwrx-BWsTYooP67nhJreg4XJCQB-SnTUUrTp6UgwDWSevQHIh6TOb0A7mtzKWp2cQL2fbWjJ72jLbKaXG97hd8WOrXZeYbQXleFGdObIadoSVdWYDIPTfGzjkzvJoVnL-Xo9CpTyChJgZQc6r_kFLKvKakAky0qnz1kDsXm5dk3DFwDn4dkQrxAvjPYG-foYJsanqKwjhyg" />
+                <div>
+                    <p class="text-xs font-bold text-on-surface">Elena Thorne</p>
+                    <p class="text-[10px] text-on-surface-variant">Lifestyle &bull; 890k Subs</p>
+                </div>
+                <span class="material-symbols-outlined ml-auto text-primary text-sm">trending_up</span>
+            </div>
+        </div>
+        <div class="mt-auto pt-6 border-t border-outline-variant/10">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xs font-black uppercase tracking-widest text-on-surface-variant">Terminal Log</h3>
+            </div>
+            <div class="font-mono text-[9px] text-on-surface-variant space-y-1 bg-surface-container-lowest p-3 rounded border border-outline-variant/10">
+                <p style="color: rgb(var(--c-green));">&gt; Syncing with API...</p>
+                <p>&gt; Analysis engine online.</p>
+                <p class="text-primary/70">&gt; Ready for hooks extraction.</p>
+                <p class="animate-pulse">_</p>
+            </div>
+        </div>
+    </aside>
 </div>
-
-<!-- ==================== COMMENTS PAGE ==================== -->
-<div class="page" id="page-comments">
-  <div class="banner-inline hidden" id="commentBanner"></div>
-
-  <div class="section">
-    <div class="section-title"><div class="icon" style="background:rgba(34,197,94,0.1)">C</div> Komentar TikTok</div>
-    <div class="grid-2">
-      <div class="form-group">
-        <label class="form-label">URL video</label>
-        <input type="text" id="commentUrl" placeholder="https://www.tiktok.com/@user/video/123...">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Maks komentar</label>
-        <input type="number" id="commentMax" value="50" min="1" max="200">
-      </div>
-    </div>
-  </div>
-
-  <button class="btn btn-primary" id="commentBtn" onclick="doComments()">Ambil Komentar</button>
-
-  <div style="height:24px"></div>
-  <div class="status-bar" id="commentStatus"><div class="spinner"></div><span id="commentStatusText"></span></div>
-  <div id="commentResults"></div>
-</div>
-
-</div><!-- .main -->
-</div><!-- .app -->
 
 <script>
-function switchPage(name, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  el.classList.add('active');
-}
-
-function toggleChip(el) { el.classList.toggle('active'); }
-function applyExample(value) { document.getElementById('keywords').value = value; }
-let profileResultsState = [];
-let sessionState = null;
-let usageState = null;
-const SPONSORED_TERMS = ['#ad', '#sponsored', 'sponsored', 'paid partnership', 'affiliate', 'kerjasama', 'promo', 'diskon', 'voucher'];
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function fmt(n) {
-  if (n == null) return '\u2014';
-  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
-  return n.toLocaleString();
-}
-function pct(n) {
-  if (n == null || Number.isNaN(n)) return '\u2014';
-  return n.toFixed(2) + '%';
-}
-function avg(results, key) {
-  const values = results.map(r => Number(r[key]) || 0).filter(v => v > 0);
-  if (!values.length) return null;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-function engagementRate(result) {
-  const views = Number(result.views) || 0;
-  if (!views) return null;
-  const interactions = (Number(result.likes) || 0) + (Number(result.comments) || 0) + (Number(result.shares) || 0);
-  return (interactions / views) * 100;
-}
-function isSponsoredPost(result) {
-  const haystack = `${result.title || ''} ${result.description || ''} ${result.caption || ''} ${result.transcript || ''}`.toLowerCase();
-  return SPONSORED_TERMS.some(term => haystack.includes(term));
-}
-function profileBadge(result) {
-  const er = engagementRate(result);
-  const sponsored = isSponsoredPost(result);
-  return {
-    er,
-    sponsored,
-  };
-}
-
-function showStatus(id, text) {
-  const bar = document.getElementById(id);
-  bar.classList.add('active');
-  // Re-add spinner if missing
-  if (!bar.querySelector('.spinner')) {
-    const sp = document.createElement('div');
-    sp.className = 'spinner';
-    bar.prepend(sp);
-  }
-  bar.querySelector('span').textContent = text;
-}
-function hideStatus(id, text) {
-  const bar = document.getElementById(id);
-  if (text) bar.querySelector('span').textContent = text;
-  const sp = bar.querySelector('.spinner');
-  if (sp) sp.remove();
-}
-function setBanner(id, html = '') {
-  const el = document.getElementById(id);
-  if (!el) return;
-  if (!html) {
-    el.innerHTML = '';
-    el.classList.add('hidden');
-    return;
-  }
-  el.innerHTML = html;
-  el.classList.remove('hidden');
-}
-
-async function refreshAccountState() {
-  try {
-    const sessionResp = await fetch('/api/auth/session');
-    sessionState = await sessionResp.json();
-    usageState = null;
-    if (sessionState?.authenticated) {
-      const usageResp = await fetch('/api/account/usage');
-      if (usageResp.ok) usageState = await usageResp.json();
+    /* ===== THEME TOGGLE ===== */
+    function updateThemeIcon() {
+        const icon = document.getElementById('themeIcon');
+        if (!icon) return;
+        icon.textContent = document.documentElement.classList.contains('dark') ? 'light_mode' : 'dark_mode';
     }
-  } catch (e) {
-    sessionState = { configured: false };
-  }
-}
+    function toggleTheme() {
+        document.documentElement.classList.toggle('dark');
+        localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        updateThemeIcon();
+    }
+    updateThemeIcon();
 
-async function doSignout() {
-  await fetch('/api/auth/signout', { method: 'POST' });
-  window.location.href = '/signin';
-}
+    /* ===== TAB SWITCHING ===== */
+    function switchTab(name, el){
+      document.querySelectorAll('.tab-btn').forEach(b=>{
+          b.classList.remove('active');
+          if(b.classList.contains('border-r-4')){
+              b.classList.add('border-transparent');
+          }
+      });
+      if (el) {
+          el.classList.add('active');
+          el.classList.remove('border-transparent');
+      }
+      
+      const sections = {
+        dashboard: document.getElementById('dashboardTab'),
+        search: document.getElementById('searchTab'),
+        profile: document.getElementById('profileTab'),
+        comments: document.getElementById('commentsTab')
+      };
+      
+      Object.entries(sections).forEach(([k,v])=> {
+          if (v) {
+              if (k === name) {
+                  v.classList.remove('hidden');
+                  v.style.display = 'block';
+              } else {
+                  v.classList.add('hidden');
+                  v.style.display = 'none';
+              }
+          }
+      });
+    }
 
-function handleApiFailure(data, fallbackMessage, bannerId) {
-  const message = data?.error || fallbackMessage;
-  if (bannerId) {
-    const cta = data?.upgrade_url ? ` <a href="${data.upgrade_url}">Buka paket</a>` : '';
-    setBanner(bannerId, `<strong>${escapeHtml(message)}</strong>${cta}`);
-  }
-  return message;
-}
+    /* ===== XSS PROTECTION ===== */
+    function escapeHTML(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
-function renderCopyBlocks(r) {
-  const title = escapeHtml(r.title || r.video_url || '');
-  const hook = escapeHtml(r.hook || r.title || r.caption || r.description || 'Belum ada hook yang bisa diringkas.');
-  const content = escapeHtml(r.content || r.description || r.caption || 'Belum ada isi yang bisa dibaca dari hasil ini.');
-  const caption = escapeHtml(r.caption || r.description || 'Belum ada caption yang kebaca.');
-  const transcript = escapeHtml(r.transcript || '');
-  const transcriptLabel = r.transcript_source === 'spoken_text' ? 'Transcript video' : 'Transcript video';
-  const transcriptBlock = transcript
-    ? `<div class="result-copy-block"><div class="result-copy-meta"><span class="copy-chip">${transcriptLabel}</span></div><strong>Transcript</strong><p>${transcript}</p></div>`
-    : `<div class="result-copy-block empty"><strong>Transcript</strong><p>Belum ada transcript suara yang berhasil dibaca. Untuk platform ini, data yang ada baru caption atau deskripsi video.</p></div>`;
+    /* ===== RESULT ROW ===== */
+    function formatNum(n) {
+      if (n == null) return '-';
+      n = Number(n);
+      if (n >= 1_000_000) return (n/1_000_000).toFixed(1) + 'M';
+      if (n >= 1_000) return (n/1_000).toFixed(1) + 'K';
+      return n.toString();
+    }
 
-  return `
-    <div class="result-copy-grid">
-      <div class="result-copy-block alt"><strong>Hook</strong><p>${hook}</p></div>
-      <div class="result-copy-block alt"><strong>Isi</strong><p>${content}</p></div>
-      <div class="result-copy-block alt"><strong>Caption</strong><p>${caption}</p></div>
-      ${transcriptBlock}
-    </div>
-  `;
-}
+    function copyHook(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        // Brief visual feedback handled inline
+      });
+    }
 
-function renderCards(containerId, results) {
-  document.getElementById(containerId).innerHTML = results.map(r => `
-    <div class="result-card">
-      <div class="result-top">
-        <span class="badge ${r.platform}">${r.platform}</span>
-        <span style="font-size:12px;color:var(--text-muted)">${r.duration ? r.duration + 's' : ''}</span>
-      </div>
-      <div class="result-title"><a href="${escapeHtml(r.video_url)}" target="_blank">${escapeHtml(r.title || r.description?.slice(0,120) || r.video_url)}</a></div>
-      <div class="result-meta">@${escapeHtml(r.author || 'unknown')}${r.music ? ' &middot; ' + escapeHtml(r.music) : ''}</div>
-      ${renderCopyBlocks(r)}
-      <div class="result-stats">
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> ${fmt(r.views)}</span>
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> ${fmt(r.likes)}</span>
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ${fmt(r.comments)}</span>
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> ${fmt(r.shares)}</span>
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> ${fmt(r.saves)}</span>
-      </div>
-    </div>
-  `).join('');
-}
+    function rowResult(item) {
+      const hook = escapeHTML(item.hook || item.title || item.caption || 'Tanpa judul');
+      const rawHook = escapeHTML(item.hook || item.title || item.caption || 'Tanpa judul');
+      const caption = escapeHTML(item.caption || item.content || item.description || '');
+      const transcript = item.transcript ? escapeHTML(item.transcript.substring(0, 120)) : '';
+      const hashtags = (item.hashtags || []).slice(0, 5);
+      const music = escapeHTML(item.music || '');
 
-function renderProfileCards(containerId, results) {
-  document.getElementById(containerId).innerHTML = results.map(r => {
-    const badge = profileBadge(r);
-    return `
-    <div class="result-card">
-      <div class="result-top">
-        <div class="result-badges">
-          <span class="badge ${r.platform}">${r.platform}</span>
-          <span class="badge analytics">${pct(badge.er)} ER</span>
-          ${badge.sponsored ? '<span class="badge sponsored">Sponsored</span>' : '<span class="badge sponsored">Organic</span>'}
+      return `<div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/10 hover:border-primary/20 transition-all group mb-3" style="box-shadow: var(--card-shadow);">
+        <div class="flex justify-between items-start gap-3 mb-3">
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase">${escapeHTML(item.platform || 'N/A')}</span>
+                    ${music ? '<span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-xs">music_note</span>' + music + '</span>' : ''}
+                </div>
+                <h5 class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors leading-snug">${hook}</h5>
+            </div>
+            <button onclick="copyHook(this.dataset.hook)" data-hook="${rawHook}" class="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-[10px] font-bold transition-all" title="Copy hook">
+                <span class="material-symbols-outlined text-sm">content_copy</span> Copy
+            </button>
         </div>
-        <span style="font-size:12px;color:var(--text-muted)">${r.duration ? r.duration + 's' : ''}</span>
-      </div>
-      <div class="result-title"><a href="${escapeHtml(r.video_url)}" target="_blank">${escapeHtml(r.title || r.description?.slice(0,120) || r.video_url)}</a></div>
-      <div class="result-meta">@${escapeHtml(r.author || 'unknown')}${r.music ? ' &middot; ' + escapeHtml(r.music) : ''}</div>
-      ${renderCopyBlocks(r)}
-      <div class="result-stats">
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> ${fmt(r.views)}</span>
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> ${fmt(r.likes)}</span>
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ${fmt(r.comments)}</span>
-        <span class="stat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> ${fmt(r.shares)}</span>
-      </div>
-    </div>
-  `;
-  }).join('') || '<p style="color:var(--text-muted);padding:6px 2px">No posts match this filter.</p>';
-}
-
-function renderStats(containerId, results) {
-  const platforms = {};
-  results.forEach(r => {
-    if (!platforms[r.platform]) platforms[r.platform] = { count: 0, views: 0 };
-    platforms[r.platform].count++;
-    platforms[r.platform].views += r.views || 0;
-  });
-  let html = '<div class="stats-row">';
-  html += `<div class="stat-card"><div class="value" style="color:var(--primary)">${results.length}</div><div class="label">Total Results</div></div>`;
-  for (const [p, s] of Object.entries(platforms)) {
-    html += `<div class="stat-card ${p}"><div class="value">${s.count}</div><div class="label">${p} &middot; ${fmt(s.views)} views</div></div>`;
-  }
-  html += '</div>';
-  document.getElementById(containerId).innerHTML = html;
-}
-
-function renderDownloads(containerId, json_file, csv_file) {
-  if (!json_file) return;
-  document.getElementById(containerId).innerHTML = `
-    <div class="download-row">
-      <a class="download-btn" href="/api/download?file=${encodeURIComponent(json_file)}">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Export JSON
-      </a>
-      <a class="download-btn" href="/api/download?file=${encodeURIComponent(csv_file)}">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Export CSV
-      </a>
-    </div>`;
-}
-
-function renderProfileAnalytics(results) {
-  const sponsored = results.filter(isSponsoredPost);
-  const organic = results.filter(r => !isSponsoredPost(r));
-  const avgEngagement = avg(results.map(r => ({ value: engagementRate(r) })), 'value');
-  const panel = document.getElementById('profileAnalytics');
-  panel.innerHTML = `
-    <div class="analytics-header">
-      <h3>Profile signals</h3>
-      <p>${results.length} konten dianalisis</p>
-    </div>
-    <div class="analytics-grid">
-      <div class="analytics-metric"><strong>${pct(avgEngagement)}</strong><span>Rata-rata engagement rate</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'views'))}</strong><span>Rata-rata views</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'likes'))}</strong><span>Rata-rata likes</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'comments'))}</strong><span>Rata-rata komentar</span></div>
-      <div class="analytics-metric"><strong>${fmt(avg(results, 'shares'))}</strong><span>Rata-rata share</span></div>
-      <div class="analytics-metric"><strong>${fmt(sponsored.length)}</strong><span>Konten sponsor terdeteksi</span></div>
-    </div>
-    <div style="height:16px"></div>
-    <div class="analytics-header">
-      <h3>Pemisahan konten</h3>
-      <p>Organik vs sponsor</p>
-    </div>
-    <div class="analytics-split">
-      <div class="analytics-split-row">
-        <div><strong>Organik</strong><span>${organic.length} konten</span></div>
-        <div style="text-align:right"><strong>${pct(avg(organic.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>rata-rata ER</span></div>
-      </div>
-      <div class="analytics-split-row">
-        <div><strong>Sponsored</strong><span>${sponsored.length} konten</span></div>
-        <div style="text-align:right"><strong>${pct(avg(sponsored.map(r => ({ value: engagementRate(r) })), 'value'))}</strong><span>rata-rata ER</span></div>
-      </div>
-    </div>
-  `;
-}
-
-function applyProfileFilters() {
-  const query = document.getElementById('profileFeedSearch').value.trim().toLowerCase();
-  const sponsoredFilter = document.getElementById('profileSponsoredFilter').value;
-  const filtered = profileResultsState.filter(result => {
-    const haystack = `${result.title || ''} ${result.description || ''} ${result.caption || ''} ${result.hook || ''} ${result.content || ''} ${result.transcript || ''}`.toLowerCase();
-    const sponsored = isSponsoredPost(result);
-    const matchesQuery = !query || haystack.includes(query);
-    const matchesSponsored =
-      sponsoredFilter === 'all' ||
-      (sponsoredFilter === 'sponsored' && sponsored) ||
-      (sponsoredFilter === 'organic' && !sponsored);
-    return matchesQuery && matchesSponsored;
-  });
-  document.getElementById('profileFilterSummary').textContent =
-    `${filtered.length} dari ${profileResultsState.length} post tampil. Gunakan rail kanan buat benchmark cepat sebelum buka video satu-satu.`;
-  renderProfileCards('profileResults', filtered);
-}
-
-/* ========== SEARCH ========== */
-async function doSearch() {
-  const raw = document.getElementById('keywords').value.trim();
-  if (!raw) return;
-  const platforms = [...document.querySelectorAll('#page-search .chip.active')].map(c => c.dataset.platform);
-  if (!platforms.length) { alert('Select at least one platform'); return; }
-
-  const btn = document.getElementById('searchBtn');
-  btn.disabled = true; btn.textContent = 'Lagi cari...';
-
-  const params = new URLSearchParams({
-    q: raw,
-    platforms: platforms.join(','),
-    max: document.getElementById('maxResults').value || 5,
-    sort: document.getElementById('sortBy').value,
-    date_range: document.getElementById('searchDateRange').value,
-  });
-  const minV = document.getElementById('minViews').value;
-  const maxV = document.getElementById('maxViews').value;
-  const minL = document.getElementById('minLikes').value;
-  const maxL = document.getElementById('maxLikes').value;
-  if (minV) params.set('min_views', minV);
-  if (maxV) params.set('max_views', maxV);
-  if (minL) params.set('min_likes', minL);
-  if (maxL) params.set('max_likes', maxL);
-
-  showStatus('searchStatus', 'Lagi ngumpulin sinyal dari ' + platforms.join(', ') + '...');
-  document.getElementById('searchStats').innerHTML = '';
-  document.getElementById('searchDownloads').innerHTML = '';
-  document.getElementById('searchResults').innerHTML = '';
-  setBanner('searchBanner');
-
-  try {
-    const resp = await fetch('/api/search?' + params);
-    const data = await resp.json();
-    if (!resp.ok || data.error) {
-      hideStatus('searchStatus', 'Error: ' + handleApiFailure(data, 'Search gagal dijalankan.', 'searchBanner'));
-      if (resp.status === 401) setTimeout(() => window.location.href = '/signin', 700);
-      return;
+        ${caption ? '<p class="text-xs text-on-surface-variant leading-relaxed mb-3 line-clamp-2">' + caption + '</p>' : ''}
+        ${transcript ? '<div class="bg-surface-container-highest rounded-lg px-3 py-2 mb-3 border-l-2 border-primary/30"><p class="text-[11px] text-on-surface-variant italic"><span class="text-primary font-bold text-[10px] uppercase mr-1">Transcript</span>' + transcript + '...</p></div>' : ''}
+        <div class="flex items-center justify-between">
+            <div class="flex gap-4">
+                <span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-sm">visibility</span><strong class="text-on-surface">${formatNum(item.views)}</strong></span>
+                <span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-sm">favorite</span><strong class="text-on-surface">${formatNum(item.likes)}</strong></span>
+                <span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-sm">chat_bubble</span><strong class="text-on-surface">${formatNum(item.comments)}</strong></span>
+                <span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-sm">share</span><strong class="text-on-surface">${formatNum(item.shares)}</strong></span>
+            </div>
+            <div class="flex gap-1 flex-wrap justify-end">${hashtags.map(h => '<span class="px-1.5 py-0.5 text-[9px] rounded bg-surface-container-highest text-on-surface-variant">#' + escapeHTML(h) + '</span>').join('')}</div>
+        </div>
+      </div>`;
     }
-    hideStatus('searchStatus', `Keluar ${data.total} hasil dalam ${data.elapsed}`);
-    renderStats('searchStats', data.results);
-    renderDownloads('searchDownloads', data.json_file, data.csv_file);
-    renderCards('searchResults', data.results);
-    await refreshAccountState();
-  } catch(e) {
-    hideStatus('searchStatus', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Cari Sinyal Sosial';
-  }
-}
 
-/* ========== PROFILE ========== */
-async function doProfile() {
-  const username = document.getElementById('profileUsername').value.trim().replace(/^@+/, '');
-  if (!username) return;
+    /* ===== SEARCH ===== */
+    async function runSearch(){
+      const q = document.getElementById('keywordInput').value.trim();
+      const platform = document.getElementById('platformSelect').value;
+      const sort = document.getElementById('sortBy').value;
+      const dateRange = document.getElementById('dateRange').value;
+      const minViews = document.getElementById('minViews').value;
+      const maxViews = document.getElementById('maxViews').value;
+      const minLikes = document.getElementById('minLikes').value;
+      const maxLikes = document.getElementById('maxLikes').value;
+      const params = new URLSearchParams({ keyword: q, platforms: platform, max_results: '5', sort, date_range: dateRange });
+      if(minViews) params.set('min_views', minViews);
+      if(maxViews) params.set('max_views', maxViews);
+      if(minLikes) params.set('min_likes', minLikes);
+      if(maxLikes) params.set('max_likes', maxLikes);
+      document.getElementById('searchMeta').innerHTML = '> Menjalankan kueri ke server...';
+      const jsonLink = document.getElementById('jsonDownload');
+      const csvLink = document.getElementById('csvDownload');
+      jsonLink.classList.add('hidden');
+      csvLink.classList.add('hidden');
 
-  const btn = document.getElementById('profileBtn');
-  btn.disabled = true; btn.textContent = 'Lagi buka...';
-  showStatus('profileStatus', `Lagi buka ${username}...`);
-  document.getElementById('profileStats').innerHTML = '';
-  document.getElementById('profileDownloads').innerHTML = '';
-  document.getElementById('profileResults').innerHTML = '';
-  document.getElementById('profileFeedSearch').value = '';
-  document.getElementById('profileSponsoredFilter').value = 'all';
-  setBanner('profileBanner');
+      try {
+          const res = await fetch('/api/search?' + params.toString());
+          const data = await res.json();
 
-  try {
-    const params = new URLSearchParams({
-      username,
-      max: document.getElementById('profileMax').value || 10,
-      sort: document.getElementById('profileSort').value,
-      date_range: document.getElementById('profileDateRange').value,
-    });
-    const resp = await fetch('/api/profile?' + params);
-    const data = await resp.json();
-    if (!resp.ok || data.error) {
-      hideStatus('profileStatus', 'Error: ' + handleApiFailure(data, 'Profile gagal dibuka.', 'profileBanner'));
-      if (resp.status === 401) setTimeout(() => window.location.href = '/signin', 700);
-      return;
+          if (!res.ok) {
+              if (res.status === 429 || res.status === 402 || res.status === 400) {
+                   document.getElementById('searchMeta').innerHTML = `<span class="text-error font-bold">> TERTOLAK: ${escapeHTML(data.error)}</span> <a href="${data.upgrade_url || '/payment'}" class="ml-2 inline-block bg-primary text-on-primary-fixed px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider">Upgrade Sekarang</a>`;
+                   document.getElementById('searchResults').innerHTML = '';
+                   return;
+              }
+              throw new Error(data.error || 'Server error');
+          }
+
+          document.getElementById('searchMeta').textContent = `> SUCCESS: ${data.results?.length || 0} hasil ditangkap.`;
+          document.getElementById('searchResults').innerHTML = (data.results || []).map(rowResult).join('') || '<div class="p-4 text-sm text-on-surface-variant">Belum ada hasil.</div>';
+          if(data.json_file){ jsonLink.href = '/api/download?file=' + encodeURIComponent(data.json_file); jsonLink.classList.remove('hidden'); }
+          if(data.csv_file){ csvLink.href = '/api/download?file=' + encodeURIComponent(data.csv_file); csvLink.classList.remove('hidden'); }
+      } catch (err) {
+          document.getElementById('searchMeta').innerHTML = `<span class="text-error">> ERROR: ${escapeHTML(err.message)}</span>`;
+      }
     }
-    hideStatus('profileStatus', `Ketemu ${data.total} video dalam ${data.elapsed}`);
-    renderStats('profileStats', data.results);
-    renderDownloads('profileDownloads', data.json_file, data.csv_file);
-    profileResultsState = data.results || [];
-    renderProfileAnalytics(profileResultsState);
-    applyProfileFilters();
-    await refreshAccountState();
-  } catch(e) {
-    hideStatus('profileStatus', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Buka Profil';
-  }
-}
 
-/* ========== COMMENTS ========== */
-async function doComments() {
-  const url = document.getElementById('commentUrl').value.trim();
-  if (!url) return;
-
-  const btn = document.getElementById('commentBtn');
-  btn.disabled = true; btn.textContent = 'Lagi ambil...';
-  showStatus('commentStatus', 'Lagi ekstrak komentar...');
-  document.getElementById('commentResults').innerHTML = '';
-  setBanner('commentBanner');
-
-  try {
-    const params = new URLSearchParams({
-      url,
-      max: document.getElementById('commentMax').value || 50,
-    });
-    const resp = await fetch('/api/comments?' + params);
-    const data = await resp.json();
-    if (!resp.ok || data.error) {
-      hideStatus('commentStatus', 'Error: ' + handleApiFailure(data, 'Komentar gagal diambil.', 'commentBanner'));
-      if (resp.status === 401) setTimeout(() => window.location.href = '/signin', 700);
-      return;
+    /* ===== PROFILE ===== */
+    async function loadProfile(){
+      const username = document.getElementById('profileInput').value.trim();
+      const sort = document.getElementById('profileSort').value;
+      const dateRange = document.getElementById('profileDateRange').value;
+      try {
+          const res = await fetch(`/api/profile?username=${encodeURIComponent(username)}&max_results=5&sort=${encodeURIComponent(sort)}&date_range=${encodeURIComponent(dateRange)}`);
+          if(!res.ok) throw new Error("Gagal mengambil profil.");
+          const data = await res.json();
+          const results = data.results || [];
+          document.getElementById('profileResults').innerHTML = results.map(rowResult).join('') || '<div class="p-4 text-sm text-on-surface-variant">Belum ada hasil profil.</div>';
+          document.getElementById('profileAnalytics').innerHTML = `<h4 class="font-headline text-lg font-bold mb-3 text-primary">Intelligence Summary</h4><p class="text-sm text-on-surface-variant">${results.length} konten dianalisis dari @<span class="font-bold text-on-surface">${escapeHTML(username)}</span>. Pattern siap disalin.</p>`;
+      } catch(err) {
+          document.getElementById('profileAnalytics').innerHTML = `<p class="text-error">${err.message}</p>`;
+      }
     }
-    const totalOnVideo = data.video_comment_count;
-    const statusText = totalOnVideo != null
-      ? `Terekstrak ${data.total} komentar dari ${totalOnVideo} komentar yang terdeteksi di video`
-      : `Ketemu ${data.total} komentar`;
-    hideStatus('commentStatus', statusText);
 
-    document.getElementById('commentResults').innerHTML = data.comments.map(c => `
-      <div class="comment-card">
-        <div class="comment-user">@${c.user || c.nickname || 'anonymous'}</div>
-        <div class="comment-text">${c.text}</div>
-        <div class="comment-meta">${c.likes ? c.likes + ' likes' : ''} ${c.replies ? '&middot; ' + c.replies + ' replies' : ''}</div>
-      </div>
-    `).join('') || `<p style="color:var(--text-muted);padding:20px">${totalOnVideo ? `Video ini terdeteksi punya ${totalOnVideo} komentar, tapi TikTok belum memuat isi komentarnya ke page payload saat scrape berjalan.` : 'No comments found in page data. TikTok may load comments dynamically after scrolling.'}</p>`;
-    await refreshAccountState();
-  } catch(e) {
-    hideStatus('commentStatus', 'Error: ' + e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = 'Ambil Komentar';
-  }
-}
+    /* ===== COMMENTS ===== */
+    async function loadComments(){
+      const videoUrl = document.getElementById('commentsUrl').value.trim();
+      const max = document.getElementById('commentsMax').value || '3';
+      document.getElementById('commentsMeta').textContent = '> Menghubungkan node ekstraksi komentar...';
+      try {
+          const res = await fetch(`/api/comments?video_url=${encodeURIComponent(videoUrl)}&max_comments=${encodeURIComponent(max)}`);
+          const data = await res.json();
+          document.getElementById('commentsMeta').textContent = `> SUCCESS: Diekstrak ${data.total || 0} komentar. Total real count: ${data.video_comment_count ?? '-'}`;
+          document.getElementById('commentsResults').innerHTML = (data.comments || []).map(c => `
+          <div class="bg-surface-container-highest rounded-lg p-4 border-l-2 border-primary">
+              <div class="font-bold text-xs text-primary mb-1">${escapeHTML(c.nickname || c.user || 'User')}</div>
+              <p class="mt-1 text-sm text-on-surface leading-snug">${escapeHTML(c.text || '')}</p>
+          </div>`).join('') || '<div class="text-sm text-on-surface-variant">Belum ada komentar.</div>';
+      } catch(err) {
+          document.getElementById('commentsMeta').textContent = `> ERROR: Ekstraksi gagal.`;
+      }
+    }
 
-refreshAccountState();
+    document.getElementById('searchBtn').addEventListener('click', runSearch);
+    document.getElementById('profileLoadBtn').addEventListener('click', loadProfile);
+    document.getElementById('commentsLoadBtn').addEventListener('click', loadComments);
 </script>
 </body>
-</html>"""
+</html>
+"""
 
 
 if __name__ == "__main__":

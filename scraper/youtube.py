@@ -5,15 +5,19 @@ from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
 
+from scrapling.fetchers import AsyncStealthySession
+
 class YouTubeScraper(BaseScraper):
     platform = "youtube"
 
-    def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
+    async def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
         print(f"[YouTube] Searching for: {keyword}")
         encoded = quote(keyword)
         url = f"https://www.youtube.com/results?search_query={encoded}"
 
-        response = self.fetch_page(url, timeout=12000)
+        async with AsyncStealthySession(headless=True) as session:
+            response = await session.fetch(url, timeout=12000)
+
         if response.status != 200:
             print(f"[YouTube] Failed with status {response.status}")
             return []
