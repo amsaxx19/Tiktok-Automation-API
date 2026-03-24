@@ -1,12 +1,10 @@
 import json
 import re
 from urllib.parse import quote
-from bs4 import BeautifulSoup
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
-
-
 from scrapling.fetchers import AsyncStealthySession
+
 
 class YouTubeScraper(BaseScraper):
     platform = "youtube"
@@ -19,21 +17,40 @@ class YouTubeScraper(BaseScraper):
         async with AsyncStealthySession(headless=True) as session:
             response = await session.fetch(url, timeout=12000)
 
-        if response.status != 200:
-            print(f"[YouTube] Failed with status {response.status}")
-            return []
+            if response.status != 200:
+                print(f"[YouTube] Failed with status {response.status}")
+                return []
 
-        # Extract ytInitialData from script tags
+            page_text = response.text or ""
+
+            # Also try extracting from script elements directly
+            script_texts = []
+            for script in response.css("script"):
+                text = script.text or ""
+                if "ytInitialData" in text:
+                    script_texts.append(text)
+
+        # Extract ytInitialData from page text or script elements
         yt_data = None
-        match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});\s*</script>", resp.text, re.DOTALL)
-        if match:
-            try:
-                yt_data = json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
+        sources = [page_text] + script_texts
+        for source in sources:
+            for pattern in [
+                r"var ytInitialData\s*=\s*(\{.*?\});\s*(?:</script>|$)",
+                r"window\[\"ytInitialData\"\]\s*=\s*(\{.*?\});\s*",
+                r"ytInitialData\s*=\s*(\{.+\})\s*;",
+            ]:
+                match = re.search(pattern, source, re.DOTALL)
+                if match:
+                    try:
+                        yt_data = json.loads(match.group(1))
+                        break
+                    except json.JSONDecodeError:
+                        continue
+            if yt_data:
+                break
 
         if not yt_data:
-            print("[YouTube] Could not find ytInitialData")
+            print(f"[YouTube] Could not find ytInitialData (page_text length: {len(page_text)}, scripts with ytInitialData: {len(script_texts)})")
             return []
 
         results = []

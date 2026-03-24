@@ -12,6 +12,8 @@ class FacebookScraper(BaseScraper):
 
     async def search(self, keyword: str, max_results: int = 20) -> list[VideoResult]:
         print(f"[Facebook] Searching for: {keyword}")
+        encoded = quote(keyword)
+        url = f"https://www.facebook.com/search/videos?q={encoded}"
 
         async with AsyncStealthySession(headless=True) as session:
             response = await session.fetch(
@@ -90,15 +92,15 @@ class FacebookScraper(BaseScraper):
             return
 
         meta = {}
-        for tag in soup.find_all("meta"):
-            prop = tag.get("property", "") or tag.get("name", "")
-            content = tag.get("content", "")
+        for tag in response.css("meta"):
+            prop = tag.attrib.get("property", "") or tag.attrib.get("name", "")
+            content = tag.attrib.get("content", "")
             if prop and content:
                 meta[prop] = content
 
-        title = meta.get("og:title", "")[:100]
-        description = meta.get("og:description", "")
-        thumbnail = meta.get("og:image", "")
+        result.title = meta.get("og:title", "")[:100]
+        result.description = meta.get("og:description", "")
+        result.thumbnail = meta.get("og:image", "")
 
         # Prefer page identity from metadata. Reel/watch path segments are not authors.
         if not result.author:

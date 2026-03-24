@@ -10,7 +10,7 @@
   }
 </script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
     tailwind.config = {
@@ -42,11 +42,11 @@
                     "tab-text":               "rgb(var(--c-tab) / <alpha-value>)",
                 },
                 fontFamily: {
-                    "headline": ["Manrope"],
-                    "body": ["Inter"],
-                    "label": ["Inter"]
+                    "headline": ["DM Serif Display", "serif"],
+                    "body": ["Plus Jakarta Sans", "sans-serif"],
+                    "label": ["Plus Jakarta Sans", "sans-serif"]
                 },
-                borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.25rem", "2xl": "1.75rem", "full": "9999px"},
             },
         },
     }
@@ -54,63 +54,63 @@
 <style>
     /* ===== LIGHT MODE (default) ===== */
     :root {
-        --c-bg: 252 249 244;
-        --c-sidebar: 255 255 255;
-        --c-surface-dim: 238 234 226;
-        --c-scl: 246 242 236;
-        --c-sc: 240 236 228;
-        --c-sch: 232 227 219;
-        --c-schh: 224 219 211;
+        --c-bg: 248 240 228;
+        --c-sidebar: 255 250 244;
+        --c-surface-dim: 241 229 214;
+        --c-scl: 255 250 244;
+        --c-sc: 245 237 226;
+        --c-sch: 237 228 216;
+        --c-schh: 228 219 207;
         --c-sclo: 255 255 255;
-        --c-sv: 232 227 219;
-        --c-on: 28 26 22;
-        --c-onv: 107 94 82;
-        --c-pri: 160 78 0;
-        --c-pric: 230 126 34;
+        --c-sv: 237 228 216;
+        --c-on: 32 22 15;
+        --c-onv: 112 91 75;
+        --c-pri: 239 90 41;
+        --c-pric: 255 141 66;
         --c-opf: 255 255 255;
-        --c-opc: 110 52 0;
+        --c-opc: 140 55 10;
         --c-ov: 212 198 184;
         --c-err: 186 26 26;
         --c-oec: 65 0 2;
-        --c-brand: 210 105 15;
+        --c-brand: 239 90 41;
         --c-tab: 135 124 114;
         --scrollbar-track: #f4f0ea;
         --scrollbar-thumb: #d4c6b8;
-        --input-border: rgba(180,160,140,0.25);
-        --active-tab-bg: rgba(230,126,34,0.07);
-        --sidebar-shadow: 2px 0 8px rgba(0,0,0,0.04);
-        --card-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        --focus-ring: rgba(160,78,0,0.4);
+        --input-border: rgba(84,52,29,0.12);
+        --active-tab-bg: rgba(239,90,41,0.08);
+        --sidebar-shadow: 2px 0 12px rgba(84,52,29,0.06);
+        --card-shadow: 0 8px 32px rgba(95,67,45,0.08);
+        --focus-ring: rgba(239,90,41,0.4);
     }
     /* ===== DARK MODE ===== */
     .dark {
-        --c-bg: 17 19 24;
-        --c-sidebar: 12 14 18;
-        --c-surface-dim: 17 19 24;
-        --c-scl: 26 28 32;
-        --c-sc: 30 32 36;
-        --c-sch: 40 42 46;
-        --c-schh: 51 53 57;
-        --c-sclo: 12 14 18;
-        --c-sv: 51 53 57;
-        --c-on: 226 226 232;
-        --c-onv: 220 193 177;
-        --c-pri: 255 183 131;
-        --c-pric: 230 126 34;
-        --c-opf: 113 55 0;
-        --c-opc: 80 38 0;
-        --c-ov: 86 67 55;
+        --c-bg: 24 18 14;
+        --c-sidebar: 18 13 10;
+        --c-surface-dim: 24 18 14;
+        --c-scl: 34 26 20;
+        --c-sc: 40 30 24;
+        --c-sch: 50 40 32;
+        --c-schh: 62 50 42;
+        --c-sclo: 18 13 10;
+        --c-sv: 62 50 42;
+        --c-on: 238 228 218;
+        --c-onv: 190 168 148;
+        --c-pri: 255 141 66;
+        --c-pric: 239 90 41;
+        --c-opf: 255 255 255;
+        --c-opc: 100 42 5;
+        --c-ov: 78 62 50;
         --c-err: 255 180 171;
         --c-oec: 255 218 214;
-        --c-brand: 255 183 131;
-        --c-tab: 148 148 148;
-        --scrollbar-track: #0c0e12;
-        --scrollbar-thumb: #333539;
-        --input-border: rgba(86,67,55,0.2);
-        --active-tab-bg: rgba(230,126,34,0.1);
-        --sidebar-shadow: 2px 0 12px rgba(0,0,0,0.3);
-        --card-shadow: none;
-        --focus-ring: rgba(255,183,131,0.5);
+        --c-brand: 255 141 66;
+        --c-tab: 160 145 132;
+        --scrollbar-track: #120d0a;
+        --scrollbar-thumb: #3e3228;
+        --input-border: rgba(120,90,65,0.2);
+        --active-tab-bg: rgba(239,90,41,0.12);
+        --sidebar-shadow: 2px 0 16px rgba(0,0,0,0.4);
+        --card-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        --focus-ring: rgba(255,141,66,0.5);
     }
     .material-symbols-outlined {
         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -152,8 +152,11 @@
 <body class="bg-background text-on-surface custom-scrollbar">
 
 <div class="flex h-screen overflow-hidden">
+    <!-- Mobile Overlay -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden" onclick="closeSidebar()"></div>
+
     <!-- SideNavBar -->
-    <aside class="fixed left-0 top-0 h-full flex flex-col p-4 z-40 bg-sidebar w-64 transition-all border-r border-outline-variant/10" style="box-shadow: var(--sidebar-shadow);">
+    <aside id="sidebar" class="fixed left-0 top-0 h-full flex flex-col p-4 z-40 bg-sidebar w-64 transition-all border-r border-outline-variant/10 -translate-x-full md:translate-x-0" style="box-shadow: var(--sidebar-shadow);">
         <div class="mb-8 px-4 flex items-center gap-3">
             <div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
                 <span class="material-symbols-outlined text-on-primary-fixed" data-icon="insights">insights</span>
@@ -194,9 +197,12 @@
     </aside>
 
     <!-- Main Terminal Canvas -->
-    <main class="ml-64 flex-1 flex flex-col min-w-0 bg-surface-dim">
-        <header class="flex justify-between items-center w-full px-8 h-20 sticky top-0 z-50 bg-background border-b border-outline-variant/10">
-            <div class="flex items-center gap-6 flex-1 max-w-2xl">
+    <main class="ml-0 md:ml-64 flex-1 flex flex-col min-w-0 bg-surface-dim">
+        <header class="flex justify-between items-center w-full px-4 md:px-8 h-16 md:h-20 sticky top-0 z-20 bg-background border-b border-outline-variant/10">
+            <div class="flex items-center gap-3 md:gap-6 flex-1 max-w-2xl">
+                <button id="hamburgerBtn" class="md:hidden p-2 text-on-surface-variant hover:text-primary transition-colors" onclick="toggleSidebar()">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
                 <div class="relative w-full">
                     <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
                     <input id="globalSearch" class="ds-input w-full py-3 pl-12 pr-4" placeholder="Quick find creators or hooks..." type="text"/>
@@ -214,14 +220,14 @@
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
             <!-- DASHBOARD TAB -->
             <section id="dashboardTab" class="tab-section">
                 <section class="mb-10">
-                    <div class="flex justify-between items-end mb-6">
+                    <div class="flex flex-col md:flex-row md:justify-between md:items-end gap-4 mb-6">
                         <div>
                             <span class="text-primary font-bold text-xs tracking-widest uppercase mb-2 block">Global Signal Map</span>
-                            <h2 class="text-4xl font-black font-headline tracking-tighter text-on-surface">Intelligence Dashboard</h2>
+                            <h2 class="text-2xl md:text-4xl font-black font-headline tracking-tighter text-on-surface">Intelligence Dashboard</h2>
                         </div>
                         <div class="flex items-center gap-3">
                             <div class="text-right">
@@ -236,8 +242,8 @@
                         </div>
                     </div>
                     <!-- Bento Terminal Grid -->
-                    <div class="grid grid-cols-12 gap-4">
-                        <div class="col-span-8 bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 relative overflow-hidden h-[400px]" style="box-shadow: var(--card-shadow);">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div class="md:col-span-8 bg-surface-container-low rounded-xl p-4 md:p-6 border border-outline-variant/10 relative overflow-hidden h-[280px] md:h-[400px]" style="box-shadow: var(--card-shadow);">
                             <div class="flex justify-between items-start mb-4 relative z-10">
                                 <div>
                                     <h3 class="text-lg font-bold font-headline">Viral Velocity Tracking</h3>
@@ -264,7 +270,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-span-4 space-y-4">
+                        <div class="md:col-span-4 space-y-4">
                             <div class="bg-surface-container-high rounded-xl p-5 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
                                 <div class="flex items-center gap-2 mb-4">
                                     <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
@@ -453,6 +459,16 @@
 </div>
 
 <script>
+    /* ===== SIDEBAR TOGGLE (MOBILE) ===== */
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        document.getElementById('sidebarOverlay').classList.toggle('hidden');
+    }
+    function closeSidebar() {
+        document.getElementById('sidebar').classList.add('-translate-x-full');
+        document.getElementById('sidebarOverlay').classList.add('hidden');
+    }
+
     /* ===== THEME TOGGLE ===== */
     function updateThemeIcon() {
         const icon = document.getElementById('themeIcon');
@@ -468,6 +484,7 @@
 
     /* ===== TAB SWITCHING ===== */
     function switchTab(name, el){
+      closeSidebar();
       document.querySelectorAll('.tab-btn').forEach(b=>{
           b.classList.remove('active');
           if(b.classList.contains('border-r-4')){

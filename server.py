@@ -784,10 +784,10 @@ def render_public_account_page(
     secondary_label: str,
     secondary_href: str,
     form_fields: str,
-    aside_title: str,
-    aside_body: str,
-    aside_list: list[str],
-    footer_note: str,
+    aside_title: str = "",
+    aside_body: str = "",
+    aside_list: list[str] | None = None,
+    footer_note: str = "",
     extra_script: str = "",
 ):
     aside_items = "".join(f"<li>{item}</li>" for item in aside_list)
@@ -884,9 +884,9 @@ body::before {{
 }}
 .layout {{
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 400px;
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }}
 .panel {{
   border-radius: 32px;
@@ -909,9 +909,9 @@ body::before {{
 h1 {{
   margin-top: 16px;
   font-family: 'DM Serif Display', serif;
-  font-size: clamp(44px, 6vw, 78px);
-  line-height: 0.95;
-  letter-spacing: -0.05em;
+  font-size: clamp(32px, 4vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
 }}
 .lead {{
   margin-top: 16px;
@@ -1061,22 +1061,11 @@ h1 {{
         <div class="eyebrow">{eyebrow}</div>
         <h1>{heading}</h1>
         <p class="lead">{subheading}</p>
-        <div class="card-row">
-          <div class="info-card">
-            <strong>Flow yang saya pilih</strong>
-            <span>Masuk, pilih paket, checkout, lalu akses aplikasi aktif otomatis begitu pembayaran masuk.</span>
-          </div>
-          <div class="info-card">
-            <strong>Untuk market Indonesia</strong>
-            <span>Bahasa dibuat sederhana, pilihan paket jelas, dan metode bayar diarahkan ke gateway lokal yang lebih cocok.</span>
-          </div>
-        </div>
       </div>
 
       <div class="panel form-panel">
         <div>
           <h2>{primary_label}</h2>
-          <p>{footer_note}</p>
         </div>
         {form_fields}
         <button class="submit" type="button">{primary_label}</button>
@@ -1085,17 +1074,6 @@ h1 {{
           <a href="/payment">Lihat paket dulu</a>
         </div>
       </div>
-    </div>
-
-    <div style="height:18px"></div>
-
-    <div class="panel aside-panel">
-      <div>
-        <h3>{aside_title}</h3>
-        <p>{aside_body}</p>
-      </div>
-      <ul>{aside_items}</ul>
-      <div class="note">{footer_note}</div>
     </div>
   </div>
 </div>
@@ -1111,11 +1089,6 @@ def render_payment_page():
         badge = "Paling dipilih" if plan["code"] == "pro" else "Langganan"
         button_href = f"/checkout/{plan['code']}"
         button_label = plan["cta"]
-        readiness = (
-            "Checkout Mayar siap dipakai."
-            if plan["checkout_url"]
-            else "Belum ada link Mayar di environment. Tinggal isi env lalu aktif."
-        )
         limits_html = "".join(f"<li>{item}</li>" for item in plan["limits"])
         plan_cards.append(
             f"""
@@ -1126,7 +1099,6 @@ def render_payment_page():
               <p class="plan-tagline">{plan['tagline']}</p>
               <ul class="plan-list">{limits_html}</ul>
               <a class="plan-button" href="{button_href}">{button_label}</a>
-              <div class="plan-note">{readiness}</div>
             </div>
             """
         )
@@ -1233,9 +1205,9 @@ body::before {{
 .hero-copy h1 {{
   margin-top: 16px;
   font-family: 'DM Serif Display', serif;
-  font-size: clamp(46px, 6vw, 82px);
-  line-height: 0.96;
-  letter-spacing: -0.05em;
+  font-size: clamp(32px, 4vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
 }}
 .hero-copy p {{
   margin-top: 16px;
@@ -1298,7 +1270,7 @@ body::before {{
 .pricing {{
   margin-top: 18px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }}
 .plan-card {{
@@ -1402,7 +1374,7 @@ body::before {{
   line-height: 1.65;
 }}
 @media (max-width: 980px) {{
-  .hero, .pricing, .mini-grid, .after-pay {{ grid-template-columns: 1fr; }}
+  .hero, .pricing, .mini-grid {{ grid-template-columns: 1fr; }}
   .topbar {{ flex-direction: column; align-items: flex-start; }}
 }}
 </style>
@@ -1419,59 +1391,18 @@ body::before {{
       </div>
     </div>
 
-    <div class="hero">
-      <div class="panel hero-copy">
-        <div class="eyebrow">Checkout akses Sinyal</div>
-        <h1>Satu halaman bayar yang rapi, jelas, dan siap untuk market Indonesia.</h1>
-        <p>Saya arahkan payment MVP ke Mayar dulu supaya kita bisa launch cepat. User pilih paket, masuk ke checkout hosted, lalu akses aktif begitu webhook pembayaran masuk ke backend dan database.</p>
-        <div class="mini-grid">
-          <div class="mini-card"><strong>Mayar</strong><span>Checkout hosted yang lebih cepat dipakai untuk MVP.</span></div>
-          <div class="mini-card"><strong>Supabase</strong><span>Auth + session + Postgres di satu stack yang ringkas.</span></div>
-          <div class="mini-card"><strong>Webhook</strong><span>Status bayar masuk ke subscription dan akses user otomatis.</span></div>
-        </div>
-      </div>
-
-      <div class="panel aside">
-        <div>
-          <h3>Yang terjadi setelah user klik bayar</h3>
-          <p>Bukan cuma invoice link. Flow backend-nya tetap saya pikirkan sebagai produk SaaS sungguhan.</p>
-        </div>
-        <div class="aside-box">
-          <strong>1. Redirect ke Mayar</strong>
-          <span>User dibawa ke hosted checkout atau product page yang sesuai dengan paket yang dipilih.</span>
-        </div>
-        <div class="aside-box">
-          <strong>2. Webhook masuk</strong>
-          <span>Backend mencatat transaksi, update invoice, dan aktifkan subscription di Postgres.</span>
-        </div>
-        <div class="aside-box">
-          <strong>3. App kasih akses</strong>
-          <span>Quota dan fitur dibaca dari plan aktif user, bukan dari frontend semata.</span>
-        </div>
-      </div>
+    <div class="panel hero-copy" style="margin-bottom: 18px;">
+      <div class="eyebrow">Pilih paket yang cocok</div>
+      <h1>Mulai riset konten tanpa ribet.</h1>
+      <p>Pilih paket sesuai kebutuhanmu. Begitu aktif, langsung bisa masuk ke workspace dan mulai cari sinyal konten yang lagi jalan.</p>
     </div>
 
     <div class="pricing">
       {plans_html}
     </div>
 
-    <div class="after-pay">
-      <div class="after-pay-card">
-        <strong>Akun langsung dicek</strong>
-        <span>Begitu user selesai bayar, backend baca invoice dan update langganan di database.</span>
-      </div>
-      <div class="after-pay-card">
-        <strong>Akses otomatis kebuka</strong>
-        <span>Search, profile, dan comments tidak dibuka manual. Semua dibaca dari status paket aktif.</span>
-      </div>
-      <div class="after-pay-card">
-        <strong>Kuota tercatat rapi</strong>
-        <span>Pemakaian per fitur langsung masuk ke usage log, jadi nanti gampang dipantau dan dibatasi per plan.</span>
-      </div>
-    </div>
-
     <div class="footnote">
-      Payment awal saya arahkan ke Mayar karena paling cepat untuk launch. Begitu volume naik dan kita butuh kontrol billing yang lebih dalam, flow ini masih bisa dipindah ke gateway direct tanpa buang fondasi auth dan Postgres.
+      Punya pertanyaan soal paket? <a href="/signin" style="color: var(--accent); font-weight: 800; text-decoration: none;">Masuk</a> dulu atau <a href="/" style="color: var(--accent); font-weight: 800; text-decoration: none;">kembali ke beranda</a>.
     </div>
   </div>
 </div>
@@ -2384,7 +2315,8 @@ def filter_results_by_date_range(results, date_range: str):
     filtered = []
     for result in results:
         parsed = parse_upload_date(result.upload_date)
-        if parsed and parsed >= cutoff:
+        # Keep results with unparseable dates (don't drop them)
+        if parsed is None or parsed >= cutoff:
             filtered.append(result)
     return filtered
 
@@ -3170,15 +3102,38 @@ footer {
 }
 @media (max-width: 980px) {
   .hero-shell, .value-grid, .pricing-grid, .scenario-panel, .data-grid, .preview-stack, .quick-proof { grid-template-columns: 1fr; }
-  .section-head, .cta-panel, .nav-inner { flex-direction: column; align-items: flex-start; }
+  .section-head, .cta-panel { flex-direction: column; align-items: flex-start; }
+  .nav-inner { flex-wrap: wrap; }
   .stats-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .hero h1 { font-size: 54px; }
+  .hero h1 { font-size: 36px; line-height: 1.15; }
   .feed-grid { grid-template-columns: 1fr; }
-  .toggle-group, .nav-links, .nav-links .link-group, .nav-links .cta-group { width: 100%; }
+  .toggle-group { width: 100%; }
   .toggle, .mode-tab { flex: 1; text-align: center; }
+  .nav-links { display: none; flex-direction: column; width: 100%; gap: 12px; padding: 16px 0; }
+  .nav-links.open { display: flex; }
+  .nav-links .link-group, .nav-links .cta-group { flex-direction: column; width: 100%; gap: 8px; }
+  .nav-links a { font-size: 15px; padding: 8px 0; }
   .button { width: 100%; }
+  .hamburger { display: flex !important; }
+}
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  flex-direction: column;
+  gap: 5px;
+}
+.hamburger span {
+  display: block;
+  width: 24px;
+  height: 2.5px;
+  background: var(--ink);
+  border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 </style>
 </head>
@@ -3187,6 +3142,9 @@ footer {
   <nav>
     <div class="container nav-inner">
       <div class="brand">Sin<span>yal</span></div>
+      <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('open')" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
       <div class="nav-links">
         <div class="link-group">
           <a href="#nilai">Kenapa enak dipakai</a>
@@ -3603,7 +3561,7 @@ APP_HTML = """<!DOCTYPE html>
   }
 </script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
     tailwind.config = {
@@ -3635,11 +3593,11 @@ APP_HTML = """<!DOCTYPE html>
                     "tab-text":               "rgb(var(--c-tab) / <alpha-value>)",
                 },
                 fontFamily: {
-                    "headline": ["Manrope"],
-                    "body": ["Inter"],
-                    "label": ["Inter"]
+                    "headline": ["DM Serif Display", "serif"],
+                    "body": ["Plus Jakarta Sans", "sans-serif"],
+                    "label": ["Plus Jakarta Sans", "sans-serif"]
                 },
-                borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.25rem", "2xl": "1.75rem", "full": "9999px"},
             },
         },
     }
@@ -3647,63 +3605,63 @@ APP_HTML = """<!DOCTYPE html>
 <style>
     /* ===== LIGHT MODE (default) ===== */
     :root {
-        --c-bg: 252 249 244;
-        --c-sidebar: 255 255 255;
-        --c-surface-dim: 238 234 226;
-        --c-scl: 246 242 236;
-        --c-sc: 240 236 228;
-        --c-sch: 232 227 219;
-        --c-schh: 224 219 211;
+        --c-bg: 248 240 228;
+        --c-sidebar: 255 250 244;
+        --c-surface-dim: 241 229 214;
+        --c-scl: 255 250 244;
+        --c-sc: 245 237 226;
+        --c-sch: 237 228 216;
+        --c-schh: 228 219 207;
         --c-sclo: 255 255 255;
-        --c-sv: 232 227 219;
-        --c-on: 28 26 22;
-        --c-onv: 107 94 82;
-        --c-pri: 160 78 0;
-        --c-pric: 230 126 34;
+        --c-sv: 237 228 216;
+        --c-on: 32 22 15;
+        --c-onv: 112 91 75;
+        --c-pri: 239 90 41;
+        --c-pric: 255 141 66;
         --c-opf: 255 255 255;
-        --c-opc: 110 52 0;
+        --c-opc: 140 55 10;
         --c-ov: 212 198 184;
         --c-err: 186 26 26;
         --c-oec: 65 0 2;
-        --c-brand: 210 105 15;
+        --c-brand: 239 90 41;
         --c-tab: 135 124 114;
         --scrollbar-track: #f4f0ea;
         --scrollbar-thumb: #d4c6b8;
-        --input-border: rgba(180,160,140,0.25);
-        --active-tab-bg: rgba(230,126,34,0.07);
-        --sidebar-shadow: 2px 0 8px rgba(0,0,0,0.04);
-        --card-shadow: 0 1px 3px rgba(0,0,0,0.06);
-        --focus-ring: rgba(160,78,0,0.4);
+        --input-border: rgba(84,52,29,0.12);
+        --active-tab-bg: rgba(239,90,41,0.08);
+        --sidebar-shadow: 2px 0 12px rgba(84,52,29,0.06);
+        --card-shadow: 0 8px 32px rgba(95,67,45,0.08);
+        --focus-ring: rgba(239,90,41,0.4);
     }
     /* ===== DARK MODE ===== */
     .dark {
-        --c-bg: 17 19 24;
-        --c-sidebar: 12 14 18;
-        --c-surface-dim: 17 19 24;
-        --c-scl: 26 28 32;
-        --c-sc: 30 32 36;
-        --c-sch: 40 42 46;
-        --c-schh: 51 53 57;
-        --c-sclo: 12 14 18;
-        --c-sv: 51 53 57;
-        --c-on: 226 226 232;
-        --c-onv: 220 193 177;
-        --c-pri: 255 183 131;
-        --c-pric: 230 126 34;
-        --c-opf: 113 55 0;
-        --c-opc: 80 38 0;
-        --c-ov: 86 67 55;
+        --c-bg: 24 18 14;
+        --c-sidebar: 18 13 10;
+        --c-surface-dim: 24 18 14;
+        --c-scl: 34 26 20;
+        --c-sc: 40 30 24;
+        --c-sch: 50 40 32;
+        --c-schh: 62 50 42;
+        --c-sclo: 18 13 10;
+        --c-sv: 62 50 42;
+        --c-on: 238 228 218;
+        --c-onv: 190 168 148;
+        --c-pri: 255 141 66;
+        --c-pric: 239 90 41;
+        --c-opf: 255 255 255;
+        --c-opc: 100 42 5;
+        --c-ov: 78 62 50;
         --c-err: 255 180 171;
         --c-oec: 255 218 214;
-        --c-brand: 255 183 131;
-        --c-tab: 148 148 148;
-        --scrollbar-track: #0c0e12;
-        --scrollbar-thumb: #333539;
-        --input-border: rgba(86,67,55,0.2);
-        --active-tab-bg: rgba(230,126,34,0.1);
-        --sidebar-shadow: 2px 0 12px rgba(0,0,0,0.3);
-        --card-shadow: none;
-        --focus-ring: rgba(255,183,131,0.5);
+        --c-brand: 255 141 66;
+        --c-tab: 160 145 132;
+        --scrollbar-track: #120d0a;
+        --scrollbar-thumb: #3e3228;
+        --input-border: rgba(120,90,65,0.2);
+        --active-tab-bg: rgba(239,90,41,0.12);
+        --sidebar-shadow: 2px 0 16px rgba(0,0,0,0.4);
+        --card-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        --focus-ring: rgba(255,141,66,0.5);
     }
     .material-symbols-outlined {
         font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -3712,7 +3670,7 @@ APP_HTML = """<!DOCTYPE html>
     body {
         background-color: rgb(var(--c-bg));
         color: rgb(var(--c-on));
-        font-family: 'Inter', sans-serif;
+        font-family: 'Plus Jakarta Sans', sans-serif;
         transition: background-color 0.35s ease, color 0.35s ease;
     }
     .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -3725,17 +3683,25 @@ APP_HTML = """<!DOCTYPE html>
         border-color: rgb(var(--c-pric));
     }
     .ds-input {
-        background-color: rgb(var(--c-sclo));
+        background-color: rgb(var(--c-sc));
         border: 1px solid var(--input-border);
         color: rgb(var(--c-on));
         border-radius: 0.75rem;
         font-size: 0.875rem;
         transition: background-color 0.3s, border-color 0.3s, color 0.3s;
     }
+    .ds-input::placeholder { color: rgb(var(--c-onv) / 0.5); }
     .ds-input:focus {
         outline: none;
-        border-color: var(--focus-ring);
-        box-shadow: 0 0 0 1px var(--focus-ring);
+        border-color: rgb(var(--c-pri));
+        box-shadow: 0 0 0 2px rgb(var(--c-pri) / 0.15);
+    }
+    select.ds-input {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 2.5rem;
     }
     .theme-transition, aside, main, header, .tab-btn, .ds-input {
         transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
@@ -3745,8 +3711,11 @@ APP_HTML = """<!DOCTYPE html>
 <body class="bg-background text-on-surface custom-scrollbar">
 
 <div class="flex h-screen overflow-hidden">
+    <!-- Mobile Overlay -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden" onclick="closeSidebar()"></div>
+
     <!-- SideNavBar -->
-    <aside class="fixed left-0 top-0 h-full flex flex-col p-4 z-40 bg-sidebar w-64 transition-all border-r border-outline-variant/10" style="box-shadow: var(--sidebar-shadow);">
+    <aside id="sidebar" class="fixed left-0 top-0 h-full flex flex-col p-4 z-40 bg-sidebar w-64 transition-all border-r border-outline-variant/10 -translate-x-full md:translate-x-0" style="box-shadow: var(--sidebar-shadow);">
         <div class="mb-8 px-4 flex items-center gap-3">
             <div class="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
                 <span class="material-symbols-outlined text-on-primary-fixed" data-icon="insights">insights</span>
@@ -3759,7 +3728,7 @@ APP_HTML = """<!DOCTYPE html>
         <nav class="flex-1 space-y-1">
             <button class="tab-btn active w-full flex items-center gap-3 text-tab-text rounded-xl px-4 py-3 font-manrope font-semibold text-sm transition-all hover:bg-surface-container-low hover:text-primary" onclick="switchTab('dashboard', this)">
                 <span class="material-symbols-outlined" data-icon="insights">insights</span>
-                <span>Intelligence</span>
+                <span>Beranda</span>
             </button>
             <button class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all" onclick="switchTab('search', this)">
                 <span class="material-symbols-outlined" data-icon="search">search</span>
@@ -3787,9 +3756,12 @@ APP_HTML = """<!DOCTYPE html>
     </aside>
 
     <!-- Main Terminal Canvas -->
-    <main class="ml-64 flex-1 flex flex-col min-w-0 bg-surface-dim">
-        <header class="flex justify-between items-center w-full px-8 h-20 sticky top-0 z-50 bg-background border-b border-outline-variant/10">
-            <div class="flex items-center gap-6 flex-1 max-w-2xl">
+    <main class="ml-0 md:ml-64 flex-1 flex flex-col min-w-0 bg-surface-dim">
+        <header class="flex justify-between items-center w-full px-4 md:px-8 h-16 md:h-20 sticky top-0 z-20 bg-background border-b border-outline-variant/10">
+            <div class="flex items-center gap-3 md:gap-6 flex-1 max-w-2xl">
+                <button id="hamburgerBtn" class="md:hidden p-2 text-on-surface-variant hover:text-primary transition-colors" onclick="toggleSidebar()">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
                 <div class="relative w-full">
                     <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
                     <input id="globalSearch" class="ds-input w-full py-3 pl-12 pr-4" placeholder="Quick find creators or hooks..." type="text"/>
@@ -3807,142 +3779,152 @@ APP_HTML = """<!DOCTYPE html>
             </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
             <!-- DASHBOARD TAB -->
             <section id="dashboardTab" class="tab-section">
-                <section class="mb-10">
-                    <div class="flex justify-between items-end mb-6">
-                        <div>
-                            <span class="text-primary font-bold text-xs tracking-widest uppercase mb-2 block">Global Signal Map</span>
-                            <h2 class="text-4xl font-black font-headline tracking-tighter text-on-surface">Intelligence Dashboard</h2>
+                <div class="mb-8">
+                    <h2 class="text-2xl md:text-3xl font-black font-headline tracking-tighter text-on-surface">Selamat datang di Sinyal</h2>
+                    <p class="mt-2 text-sm text-on-surface-variant">Riset konten sosial media dari satu tempat. Cari keyword, analisis performa, dan temukan pola konten yang works.</p>
+                </div>
+
+                <!-- Quick actions -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <button onclick="switchTab('search', this)" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group" style="box-shadow: var(--card-shadow);">
+                        <span class="material-symbols-outlined text-3xl text-primary mb-3 block" style="font-variation-settings: 'FILL' 1;">search</span>
+                        <h3 class="text-base font-bold font-headline text-on-surface group-hover:text-primary transition-colors">Riset Keyword</h3>
+                        <p class="text-xs text-on-surface-variant mt-1">Cari video dari TikTok, YouTube, Instagram, X, dan Facebook sekaligus.</p>
+                    </button>
+                    <button onclick="switchTab('profile', this)" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group" style="box-shadow: var(--card-shadow);">
+                        <span class="material-symbols-outlined text-3xl text-primary mb-3 block" style="font-variation-settings: 'FILL' 1;">person_search</span>
+                        <h3 class="text-base font-bold font-headline text-on-surface group-hover:text-primary transition-colors">Analisis Profil</h3>
+                        <p class="text-xs text-on-surface-variant mt-1">Lihat performa konten creator tertentu, temukan pattern dan hook terbaik.</p>
+                    </button>
+                    <button onclick="switchTab('comments', this)" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group" style="box-shadow: var(--card-shadow);">
+                        <span class="material-symbols-outlined text-3xl text-primary mb-3 block" style="font-variation-settings: 'FILL' 1;">forum</span>
+                        <h3 class="text-base font-bold font-headline text-on-surface group-hover:text-primary transition-colors">Baca Komentar</h3>
+                        <p class="text-xs text-on-surface-variant mt-1">Ekstrak komentar dari video manapun, lihat sentiment dan feedback audience.</p>
+                    </button>
+                </div>
+
+                <!-- Supported platforms -->
+                <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 mb-8" style="box-shadow: var(--card-shadow);">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-on-surface-variant mb-4">Platform yang didukung</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div class="flex items-center gap-2 bg-surface-container-high rounded-lg px-4 py-3">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-on-surface"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.75a8.18 8.18 0 004.77 1.52V6.84a4.84 4.84 0 01-1-.15z"/></svg>
+                            <span class="text-sm font-semibold text-on-surface">TikTok</span>
                         </div>
-                        <div class="flex items-center gap-3">
-                            <div class="text-right">
-                                <p class="text-[10px] font-bold text-on-surface-variant uppercase">Market Sentiment</p>
-                                <p class="text-sm font-headline font-bold text-primary">Bullish +14.2%</p>
+                        <div class="flex items-center gap-2 bg-surface-container-high rounded-lg px-4 py-3">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.2a3.02 3.02 0 00-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.56A3.02 3.02 0 00.5 6.2 31.7 31.7 0 000 12a31.7 31.7 0 00.5 5.8 3.02 3.02 0 002.12 2.14c1.87.56 9.38.56 9.38.56s7.5 0 9.38-.56a3.02 3.02 0 002.12-2.14A31.7 31.7 0 0024 12a31.7 31.7 0 00-.5-5.8zM9.54 15.52V8.48L15.82 12l-6.28 3.52z"/></svg>
+                            <span class="text-sm font-semibold text-on-surface">YouTube</span>
+                        </div>
+                        <div class="flex items-center gap-2 bg-surface-container-high rounded-lg px-4 py-3">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="url(#ig)"><defs><linearGradient id="ig" x1="0" y1="1" x2="1" y2="0"><stop offset="0%" stop-color="#feda75"/><stop offset="25%" stop-color="#fa7e1e"/><stop offset="50%" stop-color="#d62976"/><stop offset="75%" stop-color="#962fbf"/><stop offset="100%" stop-color="#4f5bd5"/></linearGradient></defs><path d="M12 2.16c3.2 0 3.58.01 4.85.07 3.25.15 4.77 1.69 4.92 4.92.06 1.27.07 1.65.07 4.85 0 3.2-.01 3.58-.07 4.85-.15 3.23-1.66 4.77-4.92 4.92-1.27.06-1.64.07-4.85.07-3.2 0-3.58-.01-4.85-.07-3.26-.15-4.77-1.7-4.92-4.92-.06-1.27-.07-1.65-.07-4.85 0-3.2.01-3.58.07-4.85C2.38 3.86 3.9 2.31 7.15 2.23 8.42 2.17 8.8 2.16 12 2.16zM12 0C8.74 0 8.33.01 7.05.07 2.7.27.27 2.7.07 7.05.01 8.33 0 8.74 0 12s.01 3.67.07 4.95c.2 4.36 2.62 6.78 6.98 6.98C8.33 23.99 8.74 24 12 24s3.67-.01 4.95-.07c4.35-.2 6.78-2.62 6.98-6.98.06-1.28.07-1.69.07-4.95s-.01-3.67-.07-4.95c-.2-4.35-2.63-6.78-6.98-6.98C15.67.01 15.26 0 12 0zm0 5.84A6.16 6.16 0 1018.16 12 6.16 6.16 0 0012 5.84zM12 16a4 4 0 110-8 4 4 0 010 8zm6.4-11.85a1.44 1.44 0 100 2.88 1.44 1.44 0 000-2.88z"/></svg>
+                            <span class="text-sm font-semibold text-on-surface">Instagram</span>
+                        </div>
+                        <div class="flex items-center gap-2 bg-surface-container-high rounded-lg px-4 py-3">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" class="text-on-surface"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                            <span class="text-sm font-semibold text-on-surface">X (Twitter)</span>
+                        </div>
+                        <div class="flex items-center gap-2 bg-surface-container-high rounded-lg px-4 py-3">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.79-4.7 4.53-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.89v2.26h3.32l-.53 3.5h-2.8V24C19.62 23.1 24 18.1 24 12.07z"/></svg>
+                            <span class="text-sm font-semibold text-on-surface">Facebook</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- How it works -->
+                <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-on-surface-variant mb-4">Cara kerja</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="flex gap-3">
+                            <span class="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary font-bold text-sm">1</span>
+                            <div>
+                                <p class="text-sm font-bold text-on-surface">Masukkan keyword</p>
+                                <p class="text-xs text-on-surface-variant mt-1">Tulis topik yang mau diriset, pilih platform mana aja.</p>
                             </div>
-                            <div class="h-10 w-[2px] bg-outline-variant/30"></div>
-                            <div class="text-right">
-                                <p class="text-[10px] font-bold text-on-surface-variant uppercase">Active Signals</p>
-                                <p class="text-sm font-headline font-bold text-on-surface">1,402</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <span class="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary font-bold text-sm">2</span>
+                            <div>
+                                <p class="text-sm font-bold text-on-surface">Sinyal scan otomatis</p>
+                                <p class="text-xs text-on-surface-variant mt-1">Scraping langsung dari platform — views, likes, caption, transcript.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <span class="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary font-bold text-sm">3</span>
+                            <div>
+                                <p class="text-sm font-bold text-on-surface">Download hasilnya</p>
+                                <p class="text-xs text-on-surface-variant mt-1">Export data ke JSON atau CSV untuk analisis lebih lanjut.</p>
                             </div>
                         </div>
                     </div>
-                    <!-- Bento Terminal Grid -->
-                    <div class="grid grid-cols-12 gap-4">
-                        <div class="col-span-8 bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 relative overflow-hidden h-[400px]" style="box-shadow: var(--card-shadow);">
-                            <div class="flex justify-between items-start mb-4 relative z-10">
-                                <div>
-                                    <h3 class="text-lg font-bold font-headline">Viral Velocity Tracking</h3>
-                                    <p class="text-xs text-on-surface-variant">Real-time content performance across platforms</p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <span class="px-2 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded">LIVE</span>
-                                </div>
-                            </div>
-                            <div class="absolute inset-0 top-20 flex items-end opacity-40">
-                                <div class="w-full h-full bg-gradient-to-t from-primary/20 to-transparent"></div>
-                            </div>
-                            <div class="absolute inset-0 top-24 flex items-center justify-center">
-                                <img class="w-full h-full object-cover mix-blend-overlay opacity-30" src="https://lh3.googleusercontent.com/aida-public/AB6AXuACchwIkLsq0cX0oYFtexG3ezyeZbFOOfI548UVNEYVTvQsayUaU9LyeFC-ja8SCXA2itl0pF_xUV2lKoZIyVLGkZWZGmUz3J7jTj_-HLaBF4MQGUFO20Tr37RNd2s2X-ovs_KH1EAOY7ivsEEpleObCOthVgyQu3vvSzX3sUxxl735WgdBjrXRvz7mF-7L2UXdVGwbewz4m81k1Uyqn8JGMzjf_XboDuaw7tPaKmB5FmFY7Y3wffA2x9zIqw8dDe9sdL0jO0IVHg"/>
-                                <div class="absolute bottom-10 left-10 right-10 flex justify-between">
-                                    <div class="space-y-1">
-                                        <p class="text-[10px] text-on-surface-variant font-bold uppercase">Peak Saturation</p>
-                                        <p class="text-2xl font-bold font-headline text-primary">89.4%</p>
-                                    </div>
-                                    <div class="text-right space-y-1">
-                                        <p class="text-[10px] text-on-surface-variant font-bold uppercase">Decay Start</p>
-                                        <p class="text-2xl font-bold font-headline text-on-surface">Oct 24, 2026</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-span-4 space-y-4">
-                            <div class="bg-surface-container-high rounded-xl p-5 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
-                                <div class="flex items-center gap-2 mb-4">
-                                    <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
-                                    <h4 class="text-sm font-bold uppercase tracking-tight">Emerging Hooks</h4>
-                                </div>
-                                <ul class="space-y-3">
-                                    <li class="flex justify-between items-center group cursor-pointer">
-                                        <span class="text-xs text-on-surface group-hover:text-primary transition-colors">"I didn't think I'd..."</span>
-                                        <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-on-surface-variant">+240%</span>
-                                    </li>
-                                    <li class="flex justify-between items-center group cursor-pointer">
-                                        <span class="text-xs text-on-surface group-hover:text-primary transition-colors">Lofi Productivity Hacks</span>
-                                        <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-on-surface-variant">+118%</span>
-                                    </li>
-                                    <li class="flex justify-between items-center group cursor-pointer">
-                                        <span class="text-xs text-on-surface group-hover:text-primary transition-colors">Extreme Minimalist Vlogs</span>
-                                        <span class="text-[10px] bg-surface-container-highest px-2 py-0.5 rounded text-on-surface-variant">+94%</span>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div class="bg-surface-container-lowest rounded-xl p-5 border border-outline-variant/10 h-[212px] relative overflow-hidden group" style="box-shadow: var(--card-shadow);">
-                                <img class="absolute inset-0 w-full h-full object-cover opacity-20 grayscale group-hover:grayscale-0 transition-all duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSGXq8T1indWOeXynsfBmXbe4xILe04-bTFTPeQ3HNaIQV0T4dc--aOR9pVySZ3Mhw93aX2kW9jLhKJ3y2B_EqNCLO_5mJtUMtgKys73piNC4ylyEGavx-fyIh1u7DFtLyCSiHTFBjKSA--Id7MjQUcD_QxJJzY2Z1ngr4gH0UlO1sHMnk1lE7VqDENGhgs3Xmay5b_4Ptd7nwGvKLBZ0ZiwGpX5D6vk5sObWJaZXcRES-lJI44j1oroMmKfE8-D0GztZqqVl5lA"/>
-                                <div class="relative z-10">
-                                    <h4 class="text-sm font-bold uppercase tracking-tight mb-1">Global Reach</h4>
-                                    <p class="text-[10px] text-on-surface-variant">Top region: SEA (Indonesia)</p>
-                                </div>
-                                <div class="absolute bottom-4 right-4 bg-primary/20 backdrop-blur-md px-3 py-1 rounded-full border border-primary/30">
-                                    <span class="text-[10px] font-bold text-primary">MAP VIEW</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-                <section>
-                    <div class="flex items-center justify-between mb-4 border-b border-outline-variant/10 pb-4">
-                        <div class="flex gap-6">
-                            <button class="text-sm font-bold text-primary border-b-2 border-primary pb-4 -mb-[17px]">Feed Signals</button>
-                            <button class="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors pb-4">Watchlist</button>
-                            <button class="text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors pb-4">Anomalies</button>
-                        </div>
-                    </div>
-                    <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
-                        <p class="text-sm text-on-surface-variant">Gunakan navigasi "Riset" atau "Profil" di panel kiri untuk mulai memancing intelijen real-time dan menarik data konten viral.</p>
-                    </div>
-                </section>
+                </div>
+
+                <!-- Recent activity (populated by JS) -->
+                <div id="dashboardActivity" class="mt-8"></div>
             </section>
 
             <!-- SEARCH TAB -->
             <section id="searchTab" class="tab-section hidden">
                 <div class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10" style="box-shadow: var(--card-shadow);">
-                    <h3 class="font-headline text-xl font-bold">Search Workspace (Intelligence Riset)</h3>
-                    <p class="mt-2 text-sm text-on-surface-variant">Cari keyword lalu analisis sinyal konten langsung di terminal.</p>
-                    <div class="mt-6 grid gap-4 lg:grid-cols-4">
-                        <textarea id="keywordInput" class="ds-input lg:col-span-2 p-3 min-h-[120px]" placeholder="Masukkan keyword...">openai</textarea>
-                        <select id="platformSelect" class="ds-input p-3">
-                            <option value="tiktok">TikTok</option>
-                            <option value="youtube">YouTube</option>
-                            <option value="instagram">Instagram</option>
-                            <option value="twitter">X</option>
-                            <option value="facebook">Facebook</option>
-                        </select>
-                        <select id="sortBy" class="ds-input p-3">
-                            <option value="relevance">Paling relevan</option>
-                            <option value="popular">Views tertinggi</option>
-                            <option value="most_liked">Likes tertinggi</option>
+                    <h3 class="font-headline text-xl font-bold">Riset Konten</h3>
+                    <p class="mt-2 text-sm text-on-surface-variant">Cari keyword, pilih platform, lalu analisis sinyal konten.</p>
+
+                    <!-- Keyword -->
+                    <div class="mt-6">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">Keyword</label>
+                        <textarea id="keywordInput" class="ds-input w-full p-3 min-h-[80px]" placeholder="Masukkan keyword (satu per baris untuk multi-keyword)...">openai</textarea>
+                    </div>
+
+                    <!-- Platform chips (multi-select) -->
+                    <div class="mt-4">
+                        <label class="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">Platform</label>
+                        <div id="platformChips" class="flex flex-wrap gap-2">
+                            <label class="platform-chip"><input type="checkbox" value="tiktok" checked class="hidden peer"/><span class="peer-checked:bg-primary peer-checked:text-on-primary-fixed bg-surface-container-high text-on-surface-variant px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border border-outline-variant/20 peer-checked:border-primary hover:border-primary/40 transition-all inline-flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-.88-5.64v-3.5a6.37 6.37 0 005.76 10.06 6.37 6.37 0 003.45-11.81V6.69z"/></svg>TikTok</span></label>
+                            <label class="platform-chip"><input type="checkbox" value="youtube" class="hidden peer"/><span class="peer-checked:bg-primary peer-checked:text-on-primary-fixed bg-surface-container-high text-on-surface-variant px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border border-outline-variant/20 peer-checked:border-primary hover:border-primary/40 transition-all inline-flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 00-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 00.5 6.19 31.6 31.6 0 000 12a31.6 31.6 0 00.5 5.81 3.02 3.02 0 002.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 002.12-2.14A31.6 31.6 0 0024 12a31.6 31.6 0 00-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>YouTube</span></label>
+                            <label class="platform-chip"><input type="checkbox" value="instagram" class="hidden peer"/><span class="peer-checked:bg-primary peer-checked:text-on-primary-fixed bg-surface-container-high text-on-surface-variant px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border border-outline-variant/20 peer-checked:border-primary hover:border-primary/40 transition-all inline-flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.97.24 2.44.41a4.08 4.08 0 011.52.99c.47.47.77.93.99 1.52.17.47.36 1.27.41 2.44.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.24 1.97-.41 2.44a4.08 4.08 0 01-.99 1.52 4.08 4.08 0 01-1.52.99c-.47.17-1.27.36-2.44.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.97-.24-2.44-.41a4.08 4.08 0 01-1.52-.99 4.08 4.08 0 01-.99-1.52c-.17-.47-.36-1.27-.41-2.44C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.24-1.97.41-2.44a4.08 4.08 0 01.99-1.52 4.08 4.08 0 011.52-.99c.47-.17 1.27-.36 2.44-.41C8.86 2.17 9.24 2.16 12 2.16zM12 7a5 5 0 100 10 5 5 0 000-10zm0 8.25a3.25 3.25 0 110-6.5 3.25 3.25 0 010 6.5zm5.37-8.9a1.17 1.17 0 100 2.34 1.17 1.17 0 000-2.34z"/></svg>Instagram</span></label>
+                            <label class="platform-chip"><input type="checkbox" value="twitter" class="hidden peer"/><span class="peer-checked:bg-primary peer-checked:text-on-primary-fixed bg-surface-container-high text-on-surface-variant px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border border-outline-variant/20 peer-checked:border-primary hover:border-primary/40 transition-all inline-flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>X</span></label>
+                            <label class="platform-chip"><input type="checkbox" value="facebook" class="hidden peer"/><span class="peer-checked:bg-primary peer-checked:text-on-primary-fixed bg-surface-container-high text-on-surface-variant px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border border-outline-variant/20 peer-checked:border-primary hover:border-primary/40 transition-all inline-flex items-center gap-1.5"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.07C24 5.41 18.63 0 12 0S0 5.4 0 12.07c0 6.03 4.39 11.02 10.12 11.93v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.79-4.69 4.53-4.69 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.89v2.26h3.33l-.53 3.49h-2.8v8.44C19.61 23.09 24 18.1 24 12.07z"/></svg>Facebook</span></label>
+                        </div>
+                    </div>
+
+                    <!-- Filters row -->
+                    <div class="mt-4 grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        <select id="sortBy" class="ds-input p-3 min-w-0 truncate">
+                            <option value="relevance">Relevan</option>
+                            <option value="popular">Views ↑</option>
+                            <option value="most_liked">Likes ↑</option>
                             <option value="latest">Terbaru</option>
                         </select>
-                        <select id="dateRange" class="ds-input p-3">
-                            <option value="all">Sepanjang waktu</option>
-                            <option value="7d">7 hari terakhir</option>
-                            <option value="30d">30 hari terakhir</option>
+                        <select id="dateRange" class="ds-input p-3 min-w-0 truncate">
+                            <option value="all">Semua waktu</option>
+                            <option value="7d">7 hari</option>
+                            <option value="30d">30 hari</option>
+                        </select>
+                        <select id="perPlatform" class="ds-input p-3 min-w-0 truncate">
+                            <option value="5">5 / platform</option>
+                            <option value="10" selected>10 / platform</option>
+                            <option value="20">20 / platform</option>
+                            <option value="30">30 / platform</option>
                         </select>
                         <input id="minViews" type="number" class="ds-input p-3" placeholder="Min views" />
+                    </div>
+                    <div class="mt-3 grid gap-3 grid-cols-3">
                         <input id="maxViews" type="number" class="ds-input p-3" placeholder="Max views" />
                         <input id="minLikes" type="number" class="ds-input p-3" placeholder="Min likes" />
                         <input id="maxLikes" type="number" class="ds-input p-3" placeholder="Max likes" />
                     </div>
-                    <div class="mt-6 flex flex-wrap gap-3">
-                        <button id="searchBtn" class="bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed rounded-xl px-5 py-3 text-sm font-bold hover:shadow-[0_0_15px_rgba(230,126,34,0.3)] transition-all">Scan Sinyal</button>
-                        <a id="jsonDownload" class="hidden rounded-xl bg-surface-container-high border border-outline-variant/20 px-5 py-3 text-sm font-bold text-on-surface hover:bg-surface-container-highest transition-all" href="#">Export JSON</a>
-                        <a id="csvDownload" class="hidden rounded-xl bg-surface-container-high border border-outline-variant/20 px-5 py-3 text-sm font-bold text-on-surface hover:bg-surface-container-highest transition-all" href="#">Export CSV</a>
+
+                    <!-- Actions -->
+                    <div class="mt-6 flex flex-wrap items-center gap-3">
+                        <button id="searchBtn" class="bg-gradient-to-br from-primary to-primary-container text-on-primary-fixed rounded-xl px-6 py-3 text-sm font-bold hover:shadow-[0_0_20px_rgba(239,90,41,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all inline-flex items-center gap-2"><span class="material-symbols-outlined text-lg">radar</span>Scan Sinyal</button>
+                        <a id="jsonDownload" class="hidden rounded-xl bg-surface-container-high border border-outline-variant/20 px-4 py-3 text-sm font-bold text-on-surface hover:bg-surface-container-highest transition-all inline-flex items-center gap-1.5" href="#"><span class="material-symbols-outlined text-sm">download</span>JSON</a>
+                        <a id="csvDownload" class="hidden rounded-xl bg-surface-container-high border border-outline-variant/20 px-4 py-3 text-sm font-bold text-on-surface hover:bg-surface-container-highest transition-all inline-flex items-center gap-1.5" href="#"><span class="material-symbols-outlined text-sm">download</span>CSV</a>
                     </div>
                     <p id="searchMeta" class="mt-4 text-sm font-mono text-primary/80"></p>
-                    <div class="mt-8">
-                        <div id="searchResults" class="text-sm"></div>
+                    <div class="mt-6">
+                        <div id="searchResults" class="text-sm space-y-3"></div>
                     </div>
                 </div>
             </section>
@@ -3998,54 +3980,20 @@ APP_HTML = """<!DOCTYPE html>
         </div>
     </main>
 
-    <!-- Right Side Terminal Panel -->
-    <aside class="hidden xl:flex w-80 bg-sidebar border-l border-outline-variant/10 p-6 flex flex-col gap-6 overflow-y-auto custom-scrollbar" style="box-shadow: var(--sidebar-shadow);">
-        <div class="space-y-4">
-            <div class="flex justify-between items-center">
-                <h3 class="text-xs font-black uppercase tracking-widest text-on-surface-variant">Intel Summary</h3>
-                <span class="text-[10px] font-bold text-primary">AUTO-REFRESH: ON</span>
-            </div>
-            <div class="p-4 bg-surface-container-low rounded-xl border-l-4 border-primary" style="box-shadow: var(--card-shadow);">
-                <p class="text-xs font-bold mb-1 text-on-surface">Critical Divergence</p>
-                <p class="text-[11px] text-on-surface-variant leading-relaxed">
-                    TikTok engagement for <span class="text-on-surface font-bold">#FinanceTok</span> has dropped 22% in the last 4 hours. Market is shifting toward "Long-form authenticity."
-                </p>
-            </div>
-        </div>
-        <div class="space-y-4">
-            <h3 class="text-xs font-black uppercase tracking-widest text-on-surface-variant">Top Performers</h3>
-            <div class="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer group">
-                <img class="w-10 h-10 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAX8lcs-cmEbZYFsCyZh-NtHPOTePlFHRVjhKGEWLSq-bCGyKrMZFeYuk8MwmRrRMCny6MHWJx-kpOFdrKXaZj2hjW3fmdCMB08FYPvgzlYeGRD3q35OT35zwnO7KDvalOAP_l-9_RAnIYuX3RIwiSSPqkno7EKsiQkQ_Px_kUXlBXy_j8I2-aRva9VlwSF-Ly994P0v5axqx3KiewsQGclaNDv-mnGFKScLwbMBA2xV1R7qBgVLjD3GBaK4MKsxoJU7km7kBYYvw" />
-                <div>
-                    <p class="text-xs font-bold text-on-surface">Alex Volkov</p>
-                    <p class="text-[10px] text-on-surface-variant">Tech Insight &bull; 2.4M Subs</p>
-                </div>
-                <span class="material-symbols-outlined ml-auto text-primary text-sm">trending_up</span>
-            </div>
-            <div class="flex items-center gap-3 p-3 bg-surface-container-high rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer group">
-                <img class="w-10 h-10 rounded-full object-cover grayscale group-hover:grayscale-0 transition-all" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-nDLRV8bp-PWwBGOvkcGna8RoZAoXg76refLz_Oogvbm5gBNAvrJHKmt72GIENQ-mwrx-BWsTYooP67nhJreg4XJCQB-SnTUUrTp6UgwDWSevQHIh6TOb0A7mtzKWp2cQL2fbWjJ72jLbKaXG97hd8WOrXZeYbQXleFGdObIadoSVdWYDIPTfGzjkzvJoVnL-Xo9CpTyChJgZQc6r_kFLKvKakAky0qnz1kDsXm5dk3DFwDn4dkQrxAvjPYG-foYJsanqKwjhyg" />
-                <div>
-                    <p class="text-xs font-bold text-on-surface">Elena Thorne</p>
-                    <p class="text-[10px] text-on-surface-variant">Lifestyle &bull; 890k Subs</p>
-                </div>
-                <span class="material-symbols-outlined ml-auto text-primary text-sm">trending_up</span>
-            </div>
-        </div>
-        <div class="mt-auto pt-6 border-t border-outline-variant/10">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xs font-black uppercase tracking-widest text-on-surface-variant">Terminal Log</h3>
-            </div>
-            <div class="font-mono text-[9px] text-on-surface-variant space-y-1 bg-surface-container-lowest p-3 rounded border border-outline-variant/10">
-                <p style="color: rgb(var(--c-green));">&gt; Syncing with API...</p>
-                <p>&gt; Analysis engine online.</p>
-                <p class="text-primary/70">&gt; Ready for hooks extraction.</p>
-                <p class="animate-pulse">_</p>
-            </div>
-        </div>
-    </aside>
+    <!-- Right sidebar removed — was static dummy data -->
 </div>
 
 <script>
+    /* ===== SIDEBAR TOGGLE (MOBILE) ===== */
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        document.getElementById('sidebarOverlay').classList.toggle('hidden');
+    }
+    function closeSidebar() {
+        document.getElementById('sidebar').classList.add('-translate-x-full');
+        document.getElementById('sidebarOverlay').classList.add('hidden');
+    }
+
     /* ===== THEME TOGGLE ===== */
     function updateThemeIcon() {
         const icon = document.getElementById('themeIcon');
@@ -4061,6 +4009,7 @@ APP_HTML = """<!DOCTYPE html>
 
     /* ===== TAB SWITCHING ===== */
     function switchTab(name, el){
+      closeSidebar();
       document.querySelectorAll('.tab-btn').forEach(b=>{
           b.classList.remove('active');
           if(b.classList.contains('border-r-4')){
@@ -4118,30 +4067,37 @@ APP_HTML = """<!DOCTYPE html>
       });
     }
 
+    let _rowId = 0;
     function rowResult(item) {
+      const rid = _rowId++;
       const hook = escapeHTML(item.hook || item.title || item.caption || 'Tanpa judul');
       const rawHook = escapeHTML(item.hook || item.title || item.caption || 'Tanpa judul');
       const caption = escapeHTML(item.caption || item.content || item.description || '');
-      const transcript = item.transcript ? escapeHTML(item.transcript.substring(0, 120)) : '';
+      const transcript = item.transcript ? escapeHTML(item.transcript) : '';
+      const transcriptShort = transcript.length > 150 ? transcript.substring(0, 150) + '...' : transcript;
       const hashtags = (item.hashtags || []).slice(0, 5);
       const music = escapeHTML(item.music || '');
+      const videoUrl = escapeHTML(item.video_url || '');
+      const author = escapeHTML(item.author || '');
+      const authorUrl = escapeHTML(item.author_url || '');
 
       return `<div class="bg-surface-container-low rounded-xl p-5 border border-outline-variant/10 hover:border-primary/20 transition-all group mb-3" style="box-shadow: var(--card-shadow);">
-        <div class="flex justify-between items-start gap-3 mb-3">
+        <div class="flex justify-between items-start gap-3 mb-2">
             <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
                     <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase">${escapeHTML(item.platform || 'N/A')}</span>
+                    ${author ? (authorUrl ? '<a href="' + authorUrl + '" target="_blank" class="text-[10px] text-on-surface-variant hover:text-primary transition-colors">@' + author + '</a>' : '<span class="text-[10px] text-on-surface-variant">@' + author + '</span>') : ''}
                     ${music ? '<span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-xs">music_note</span>' + music + '</span>' : ''}
                 </div>
-                <h5 class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors leading-snug">${hook}</h5>
+                <a href="${videoUrl}" target="_blank" class="text-sm font-bold text-on-surface group-hover:text-primary transition-colors leading-snug hover:underline block">${hook}</a>
             </div>
             <button onclick="copyHook(this.dataset.hook)" data-hook="${rawHook}" class="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-[10px] font-bold transition-all" title="Copy hook">
                 <span class="material-symbols-outlined text-sm">content_copy</span> Copy
             </button>
         </div>
-        ${caption ? '<p class="text-xs text-on-surface-variant leading-relaxed mb-3 line-clamp-2">' + caption + '</p>' : ''}
-        ${transcript ? '<div class="bg-surface-container-highest rounded-lg px-3 py-2 mb-3 border-l-2 border-primary/30"><p class="text-[11px] text-on-surface-variant italic"><span class="text-primary font-bold text-[10px] uppercase mr-1">Transcript</span>' + transcript + '...</p></div>' : ''}
-        <div class="flex items-center justify-between">
+        ${caption ? '<div class="mb-3"><p id="cap_' + rid + '" class="text-xs text-on-surface-variant leading-relaxed line-clamp-2">' + caption + '</p>' + (caption.length > 120 ? '<button onclick="document.getElementById(\'cap_' + rid + '\').classList.toggle(\'line-clamp-2\');this.textContent=this.textContent===\'Selengkapnya\'?\'Tutup\':\'Selengkapnya\'" class="text-[10px] text-primary font-bold mt-1 hover:underline">Selengkapnya</button>' : '') + '</div>' : ''}
+        ${transcript ? '<div class="mb-3 bg-surface-container-highest rounded-lg px-3 py-2 border-l-2 border-primary/30"><div class="flex items-center justify-between mb-1"><span class="text-primary font-bold text-[10px] uppercase">Transcript</span>' + (transcript.length > 150 ? '<button onclick="const el=document.getElementById(\'tr_' + rid + '\');const f=document.getElementById(\'trf_' + rid + '\');if(el.classList.contains(\'hidden\')){el.classList.remove(\'hidden\');f.classList.add(\'hidden\');this.textContent=\'Tutup\'}else{el.classList.add(\'hidden\');f.classList.remove(\'hidden\');this.textContent=\'Baca semua\'}" class="text-[10px] text-primary font-bold hover:underline">Baca semua</button>' : '') + '</div><p id="trf_' + rid + '" class="text-[11px] text-on-surface-variant italic">' + transcriptShort + '</p><p id="tr_' + rid + '" class="text-[11px] text-on-surface-variant italic hidden">' + transcript + '</p></div>' : ''}
+        <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex gap-4">
                 <span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-sm">visibility</span><strong class="text-on-surface">${formatNum(item.views)}</strong></span>
                 <span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-sm">favorite</span><strong class="text-on-surface">${formatNum(item.likes)}</strong></span>
@@ -4156,14 +4112,16 @@ APP_HTML = """<!DOCTYPE html>
     /* ===== SEARCH ===== */
     async function runSearch(){
       const q = document.getElementById('keywordInput').value.trim();
-      const platform = document.getElementById('platformSelect').value;
+      const platforms = Array.from(document.querySelectorAll('#platformChips input[type="checkbox"]:checked')).map(c => c.value).join(',');
+      if (!platforms) { document.getElementById('searchMeta').innerHTML = '<span class="text-error">> Pilih minimal 1 platform.</span>'; return; }
       const sort = document.getElementById('sortBy').value;
       const dateRange = document.getElementById('dateRange').value;
       const minViews = document.getElementById('minViews').value;
       const maxViews = document.getElementById('maxViews').value;
       const minLikes = document.getElementById('minLikes').value;
       const maxLikes = document.getElementById('maxLikes').value;
-      const params = new URLSearchParams({ keyword: q, platforms: platform, max_results: '5', sort, date_range: dateRange });
+      const perPlatform = document.getElementById('perPlatform').value;
+      const params = new URLSearchParams({ keyword: q, platforms, max_results: perPlatform, sort, date_range: dateRange });
       if(minViews) params.set('min_views', minViews);
       if(maxViews) params.set('max_views', maxViews);
       if(minLikes) params.set('min_likes', minLikes);

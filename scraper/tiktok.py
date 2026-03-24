@@ -7,7 +7,7 @@ from urllib.parse import quote
 from scrapling.fetchers import AsyncStealthySession
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
-from scraper.whisper_transcribe import transcribe_tiktok_video
+import httpx
 
 
 class TikTokScraper(BaseScraper):
@@ -114,12 +114,9 @@ class TikTokScraper(BaseScraper):
                     if len(results) >= max_results:
                         break
 
-        # Automatically enrich results with transcripts if TikTok blocked the payload
-        needs_transcript = [r for r in results if not r.transcript]
-        if needs_transcript:
-            print(f"[TikTok/Scrapling] Auto-extracting transcripts for {len(needs_transcript)} videos...")
-            transcript_tasks = [self._enrich_transcript(r) for r in needs_transcript]
-            await asyncio.gather(*transcript_tasks, return_exceptions=True)
+        has_transcript = sum(1 for r in results if r.transcript)
+        sources = set(r.transcript_source for r in results if r.transcript_source)
+        print(f"[TikTok] Transcripts: {has_transcript}/{len(results)} (sources: {', '.join(sources) or 'none'})")
 
         if sort == "popular":
             results.sort(key=lambda r: r.views or 0, reverse=True)
@@ -361,7 +358,13 @@ class TikTokScraper(BaseScraper):
 
         caption = self._normalize_text(item.get("desc", ""))
         hashtags = re.findall(r"#(\w+)", caption)
-        transcript = self._extract_transcript(item)
+        transcript, transcript_source = await self._extract_transcript(item)
+        # Use caption as transcript fallback if it's long enough to be spoken content
+        if not transcript:
+            caption_clean = re.sub(r"#\w+", "", caption).strip()
+            if len(caption_clean) > 50:
+                transcript = caption_clean
+                transcript_source = "caption"
 
         return VideoResult(
             platform="tiktok",
@@ -382,7 +385,7 @@ class TikTokScraper(BaseScraper):
             thumbnail=video.get("cover", ""),
             music=music.get("title", ""),
             transcript=transcript,
-            transcript_source="spoken_text" if transcript else "",
+            transcript_source=transcript_source,
             hashtags=hashtags,
         )
 
@@ -429,30 +432,81 @@ class TikTokScraper(BaseScraper):
             hashtags=re.findall(r"#(\w+)", description),
         )
 
-    async def _enrich_transcript(self, result: VideoResult) -> None:
-        """Fallback transcript extractor when itemStruct is strictly blocked."""
+    @staticmethod
+    async def _fetch_subtitle(url: str) -> str:
+        """Fetch and parse TikTok subtitle file (WebVTT/JSON) via httpx."""
         try:
-            transcript = await transcribe_tiktok_video(
-                result.video_url, timeout_ms=20000
-            )
-            if transcript:
-                result.transcript = transcript
-                result.transcript_source = "scrapling_auto"
-        except Exception as e:
-            print(f"[TikTok] Auto-transcript error for {result.video_url}: {e}")
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                resp = await client.get(url, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": "https://www.tiktok.com/",
+                })
+                if resp.status_code != 200:
+                    return ""
+                text = resp.text
+                # Try JSON subtitle format (TikTok's common format)
+                try:
+                    sub_data = json.loads(text)
+                    parts = []
+                    for seg in sub_data if isinstance(sub_data, list) else sub_data.get("utterances", []):
+                        parts.append(seg.get("text", ""))
+                    return " ".join(p for p in parts if p).strip()
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+                # Try WebVTT format
+                lines = []
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("WEBVTT") or line.startswith("NOTE") or "-->" in line or line.isdigit():
+                        continue
+                    # Remove VTT tags like <c> </c>
+                    clean = re.sub(r"<[^>]+>", "", line).strip()
+                    if clean and clean not in lines:
+                        lines.append(clean)
+                return " ".join(lines).strip()
+        except Exception:
+            return ""
 
     @classmethod
-    def _extract_transcript(cls, item: dict) -> str:
+    async def _extract_transcript(cls, item: dict) -> tuple[str, str]:
+        """Extract transcript from TikTok item data. Returns (transcript, source)."""
         caption = cls._normalize_text(item.get("desc", ""))
+
+        # Method 1: contents[].desc (TikTok's spoken text field — best quality)
         transcript_parts = []
         for content in item.get("contents", []) or []:
             desc = cls._normalize_text(content.get("desc", ""))
             if desc and desc not in transcript_parts:
                 transcript_parts.append(desc)
-        transcript = cls._normalize_text(" ".join(transcript_parts))
-        if transcript and transcript.lower() != caption.lower():
-            return transcript
-        return ""
+        if transcript_parts:
+            transcript = cls._normalize_text(" ".join(transcript_parts))
+            if transcript and transcript.lower() != caption.lower():
+                return transcript, "spoken_text"
+
+        # Method 2: video.subtitleInfos — fetch actual subtitle files via httpx
+        video = item.get("video", {})
+        subtitle_infos = video.get("subtitleInfos", []) or []
+        if subtitle_infos:
+            # Prefer English, then any language
+            sorted_subs = sorted(subtitle_infos, key=lambda s: (0 if "en" in s.get("LanguageCodeName", "").lower() else 1))
+            for sub_info in sorted_subs:
+                sub_url = sub_info.get("Url") or sub_info.get("url") or sub_info.get("UrlExpire") or ""
+                if sub_url:
+                    transcript = await cls._fetch_subtitle(sub_url)
+                    if transcript:
+                        lang = sub_info.get("LanguageCodeName", "unknown")
+                        return transcript, f"subtitle:{lang}"
+
+        # Method 3: imagePost.images[].title (for photo carousel posts)
+        img_parts = []
+        for img in (item.get("imagePost", {}) or {}).get("images", []) or []:
+            title = cls._normalize_text(img.get("title", ""))
+            if title and title not in img_parts:
+                img_parts.append(title)
+        if img_parts:
+            return cls._normalize_text(" ".join(img_parts)), "image_text"
+
+        return "", ""
 
     @staticmethod
     def _normalize_text(value: str) -> str:

@@ -103,13 +103,11 @@ class InstagramScraper(BaseScraper):
         if response.status != 200:
             return None
 
-        soup = BeautifulSoup(resp.text, "lxml")
-
-        # Extract data from meta tags
+        # Extract data from meta tags using Scrapling's CSS selectors
         meta = {}
-        for tag in soup.find_all("meta"):
-            prop = tag.get("property", "") or tag.get("name", "")
-            content = tag.get("content", "")
+        for tag in response.css("meta"):
+            prop = tag.attrib.get("property", "") or tag.attrib.get("name", "")
+            content = tag.attrib.get("content", "")
             if prop and content:
                 meta[prop] = content
 
