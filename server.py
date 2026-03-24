@@ -402,38 +402,13 @@ def parse_epoch_millis(value) -> datetime | None:
         return None
 
 
-def infer_plan_code(product_name: str, amount: int) -> str | None:
-    normalized_name = normalize_text(product_name).lower()
-    for code, plan in PLAN_CATALOG.items():
-        if normalized_name and (
-            code in normalized_name
-            or normalize_text(plan["name"]).lower() in normalized_name
-        ):
-            return code
-    for code, plan in PLAN_CATALOG.items():
-        if amount == plan["price_idr"]:
-            return code
-    return None
-
-
-def billing_period_end(start_at: datetime | None, plan_code: str | None) -> datetime | None:
-    if not start_at or not plan_code:
-        return None
-    billing_interval = "monthly"
-    if plan_code in PLAN_CATALOG:
-        billing_interval = "yearly" if PLAN_CATALOG[plan_code].get("billing_interval") == "yearly" else "monthly"
-    if billing_interval == "yearly":
-        return start_at + timedelta(days=365)
-    return start_at + timedelta(days=30)
-
-
-async def fetch_profile_by_email(email: str) -> dict | None:
+async def fetch_user_profile(user_id: str) -> dict | None:
     status_code, data, _ = await supabase_rest_request(
         "GET",
         "/rest/v1/profiles",
         params={
-            "select": "user_id,email,full_name,company_name,phone,role,onboarding_use_case",
-            "email": f"eq.{email}",
+            "select": "id,email,tier,daily_searches_left,last_search_reset",
+            "id": f"eq.{user_id}",
             "limit": "1",
         },
     )
@@ -441,95 +416,38 @@ async def fetch_profile_by_email(email: str) -> dict | None:
         return None
     return data[0]
 
-
-async def fetch_plan_row(plan_code: str) -> dict | None:
-    status_code, data, _ = await supabase_rest_request(
-        "GET",
-        "/rest/v1/plans",
-        params={
-            "select": "*",
-            "code": f"eq.{plan_code}",
-            "limit": "1",
-        },
-    )
-    if status_code != 200 or not isinstance(data, list) or not data:
+async def get_and_reset_profile_usage(user_id: str) -> dict | None:
+    profile = await fetch_user_profile(user_id)
+    if not profile:
         return None
-    return data[0]
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    last_reset = profile.get("last_search_reset", "")
+    
+    if not last_reset.startswith(today):
+        # Reset limits based on tier
+        tier = profile.get("tier", "free")
+        plan = PLAN_CATALOG.get(tier) or PLAN_CATALOG["free"]
+        new_limit = plan["daily_search_limit"]
+        
+        await supabase_rest_request(
+            "PATCH",
+            f"/rest/v1/profiles?id=eq.{user_id}",
+            payload={"daily_searches_left": new_limit, "last_search_reset": datetime.now(timezone.utc).isoformat()}
+        )
+        profile["daily_searches_left"] = new_limit
+        profile["last_search_reset"] = datetime.now(timezone.utc).isoformat()
+        
+    return profile
 
-
-async def fetch_latest_subscription(user_id: str) -> dict | None:
-    status_code, data, _ = await supabase_rest_request(
-        "GET",
-        "/rest/v1/subscriptions",
-        params={
-            "select": "*",
-            "user_id": f"eq.{user_id}",
-            "order": "created_at.desc",
-            "limit": "1",
-        },
-    )
-    if status_code != 200 or not isinstance(data, list) or not data:
-        return None
-    return data[0]
-
-
-async def fetch_current_subscription(user_id: str) -> tuple[dict | None, dict | None]:
-    subscription = await fetch_latest_subscription(user_id)
-    if not subscription:
-        return None, None
-    plan = await fetch_plan_row(subscription.get("plan_code"))
-    return subscription, plan
-
-
-def subscription_is_active(subscription: dict | None) -> bool:
-    if not subscription:
-        return False
-    if subscription.get("status") != "active":
-        return False
-    current_period_end = parse_upload_date(subscription.get("current_period_end"))
-    if current_period_end and current_period_end < datetime.now(timezone.utc):
-        return False
-    return True
-
-
-def usage_period_start(subscription: dict | None) -> datetime:
-    if subscription:
-        start = parse_upload_date(subscription.get("current_period_start"))
-        if start:
-            return start
-    now = datetime.now(timezone.utc)
-    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-
-async def get_usage_total(user_id: str, event_type: str, since: datetime) -> int:
-    status_code, data, _ = await supabase_rest_request(
-        "GET",
-        "/rest/v1/usage_events",
-        params={
-            "select": "units",
-            "user_id": f"eq.{user_id}",
-            "event_type": f"eq.{event_type}",
-            "created_at": f"gte.{since.isoformat()}",
-            "limit": "1000",
-        },
-    )
-    if status_code != 200 or not isinstance(data, list):
-        return 0
-    return sum(int(item.get("units") or 0) for item in data)
-
-
-async def record_usage_event(user_id: str, event_type: str, metadata: dict | None = None, units: int = 1):
+async def decrement_search_limit(user_id: str, current_limit: int):
+    new_limit = max(0, current_limit - 1)
     await supabase_rest_request(
-        "POST",
-        "/rest/v1/usage_events",
-        payload={
-            "user_id": user_id,
-            "event_type": event_type,
-            "units": units,
-            "metadata": metadata or {},
-        },
-        prefer="return=minimal",
+        "PATCH",
+        f"/rest/v1/profiles?id=eq.{user_id}",
+        payload={"daily_searches_left": new_limit}
     )
+
 
 
 def get_client_ip(request: Request) -> str:
@@ -628,66 +546,44 @@ async def enforce_feature_access(request: Request, feature: str) -> tuple[dict |
     if not supabase_rest_configured():
         return user, None, None
 
-    subscription, plan = await fetch_current_subscription(user["id"])
+    profile = await get_and_reset_profile_usage(user["id"])
+    if not profile:
+        profile = {"tier": "free", "daily_searches_left": FREE_DAILY_SEARCH_LIMIT}
+    
+    tier = profile.get("tier", "free")
+    plan = PLAN_CATALOG.get(tier) or _get_free_plan()
+    plan["code"] = tier
 
-    # No active subscription → treat as FREE tier
-    if not subscription_is_active(subscription) or not plan:
-        plan = _get_free_plan()
+    # Attach profile data to the user object so routes can read daily_searches_left
+    user["profile"] = profile
 
     # --- Daily search limit check ---
     if feature == "search":
-        daily_limit = int(plan.get("daily_search_limit") or 0)
-        if daily_limit > 0:
-            used, _ = _check_ip_daily_search(request)
-            if used >= daily_limit:
-                return user, plan, JSONResponse(
-                    {
-                        "error": f"Kuota pencarian hari ini habis ({daily_limit}/hari). Upgrade untuk lebih banyak.",
-                        "code": "quota_exceeded",
-                        "feature": feature,
-                        "limit": daily_limit,
-                        "used": used,
-                        "plan_code": plan.get("code"),
-                        "upgrade_url": "/payment",
-                    },
-                    status_code=429,
-                )
-
-    # --- Monthly limit check for profile/comments/transcript ---
-    limit_map = {
-        "profile": "monthly_profile_limit",
-        "comments": "monthly_comment_limit",
-        "transcript": "monthly_transcript_limit",
-    }
-    limit_field = limit_map.get(feature)
-    if limit_field:
-        limit_value = int(plan.get(limit_field) or 0)
-        if limit_value > 0:
-            used = await get_usage_total(user["id"], feature, usage_period_start(subscription))
-            if used >= limit_value:
-                return user, plan, JSONResponse(
-                    {
-                        "error": "Kuota paket bulan ini sudah habis.",
-                        "code": "quota_exceeded",
-                        "feature": feature,
-                        "limit": limit_value,
-                        "used": used,
-                        "plan_code": plan.get("code"),
-                        "upgrade_url": "/payment",
-                    },
-                    status_code=429,
-                )
-        elif limit_value == 0 and plan.get("code") == "free":
+        daily_limit = plan.get("daily_search_limit", 0)
+        daily_searches_left = int(profile.get("daily_searches_left", 0))
+        if daily_limit > 0 and daily_searches_left <= 0:
             return user, plan, JSONResponse(
                 {
-                    "error": "Fitur ini belum tersedia di paket Free. Upgrade untuk akses.",
-                    "code": "feature_locked",
+                    "error": f"Kuota pencarian hari ini habis. Upgrade untuk lebih banyak.",
+                    "code": "quota_exceeded",
                     "feature": feature,
-                    "plan_code": "free",
-                    "upgrade_url": "/payment",
+                    "limit": daily_limit,
+                    "used": daily_limit,
+                    "plan_code": plan.get("code"),
+                    "upgrade_url": plan.get("checkout_url") or "/payment",
                 },
-                status_code=402,
+                status_code=429,
             )
+        return user, plan, None
+
+    # --- Profile/Comments limits ---
+    # For MVP, Starter tier allows profiles (no hard monthly reset mechanism yet)
+    # If they are on 'free' and trying non-search feature, we block them.
+    if tier == "free":
+        return user, plan, JSONResponse(
+            {"error": "Fitur ini khusus akun Starter / Pro. Silakan upgrade.", "code": "upgrade_required", "upgrade_url": "/payment"},
+            status_code=403,
+        )
 
     return user, plan, None
 
@@ -1789,21 +1685,6 @@ async def auth_signup(request: Request, payload: dict = Body(...)):
     response = JSONResponse(data, status_code=status_code)
     session = data.get("session") or {}
     set_auth_cookies(response, session.get("access_token"), session.get("refresh_token"))
-    user = data.get("user") or {}
-    user_id = user.get("id")
-    if user_id and supabase_rest_configured():
-        await supabase_rest_request(
-            "PATCH",
-            "/rest/v1/profiles",
-            params={"user_id": f"eq.{user_id}"},
-            payload={
-                "full_name": full_name or None,
-                "company_name": company_name or None,
-                "onboarding_use_case": onboarding_use_case or None,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
-            prefer="return=minimal",
-        )
     return response
 
 
@@ -1840,15 +1721,14 @@ async def auth_session(request: Request):
     if not supabase_auth_configured():
         return {"configured": False, "authenticated": False}
     user = await get_authenticated_user(request)
-    subscription = plan = None
+    profile = None
     if user and supabase_rest_configured():
-        subscription, plan = await fetch_current_subscription(user["id"])
+        profile = await get_and_reset_profile_usage(user["id"])
     return {
         "configured": True,
         "authenticated": bool(user),
-        "user": user,
-        "subscription": subscription,
-        "plan": plan,
+        "user": {"email": user["email"], "id": user["id"]} if user else None,
+        "profile": profile,
     }
 
 
@@ -1881,20 +1761,16 @@ async def account_usage(request: Request):
     if not supabase_rest_configured():
         return {"configured": True, "database_ready": False, "user": user}
 
-    subscription, plan = await fetch_current_subscription(user["id"])
-    period_start = usage_period_start(subscription)
-    counters = {}
-    for event_type in ("search", "profile", "comments", "transcript"):
-        counters[event_type] = await get_usage_total(user["id"], event_type, period_start)
+    profile = await get_and_reset_profile_usage(user["id"])
+    tier = profile.get("tier", "free") if profile else "free"
+    plan = PLAN_CATALOG.get(tier) or PLAN_CATALOG["free"]
 
     return {
         "configured": True,
         "database_ready": True,
-        "user": user,
-        "subscription": subscription,
-        "plan": plan,
-        "period_start": period_start.isoformat(),
-        "usage": counters,
+        "user": {"email": user["email"], "id": user["id"]},
+        "profile": profile,
+        "plan": {**plan, "code": tier},
     }
 
 
@@ -1903,48 +1779,28 @@ async def account_next_step(request: Request):
     if not supabase_auth_configured():
         return {
             "configured": False,
-            "target": "/app",
-            "title": "Workspace siap dibuka",
-            "message": "Kamu bisa langsung masuk ke app dan mulai eksplor workflow riset yang ada sekarang.",
-            "cta_label": "Buka app",
+            "target": "/app", "title": "Workspace siap dibuka", "cta_label": "Buka app",
         }
 
     user = await get_authenticated_user(request)
     if not user:
         return {
-            "configured": True,
-            "authenticated": False,
-            "target": "/signin",
-            "title": "Masuk dulu",
-            "message": "Akun belum aktif di browser ini. Masuk dulu supaya sistem bisa cek paket dan kuota kamu.",
-            "cta_label": "Masuk",
+            "configured": True, "authenticated": False,
+            "target": "/signin", "title": "Masuk dulu", "cta_label": "Masuk",
         }
 
-    subscription = plan = None
-    if supabase_rest_configured():
-        subscription, plan = await fetch_current_subscription(user["id"])
+    profile = await get_and_reset_profile_usage(user["id"]) if supabase_rest_configured() else None
+    tier = profile.get("tier", "free") if profile else "free"
 
-    if subscription_is_active(subscription):
+    if tier != "free":
         return {
-            "configured": True,
-            "authenticated": True,
-            "target": "/app",
-            "title": "Akun siap dipakai",
-            "message": f"Paket {plan.get('name') if plan else subscription.get('plan_code')} aktif. Kamu bisa lanjut langsung ke app.",
-            "cta_label": "Masuk ke app",
-            "plan": plan,
-            "subscription": subscription,
+            "configured": True, "authenticated": True, "target": "/app",
+            "title": "Akun Premium aktif", "cta_label": "Masuk ke app",
         }
 
     return {
-        "configured": True,
-        "authenticated": True,
-        "target": "/payment",
-        "title": "Pilih paket dulu",
-        "message": "Akun sudah jadi, tapi paket aktif belum ada. Langkah berikutnya tinggal pilih paket supaya akses fitur terbuka.",
-        "cta_label": "Lihat paket",
-        "plan": plan,
-        "subscription": subscription,
+        "configured": True, "authenticated": True, "target": "/payment",
+        "title": "Pilih paket", "cta_label": "Lihat paket",
     }
 
 
@@ -1956,100 +1812,39 @@ async def mayar_webhook(request: Request, payload: dict = Body(...)):
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     amount = int(data.get("amount") or payload.get("amount") or 0)
     payer_email = normalize_text(
-        data.get("customerEmail")
-        or data.get("email")
-        or payload.get("customerEmail")
-        or payload.get("email")
+        data.get("customerEmail") or data.get("email") or payload.get("customerEmail") or payload.get("email")
     ).lower()
-    provider_invoice_id = str(
-        data.get("invoiceId")
-        or data.get("id")
-        or payload.get("invoiceId")
-        or payload.get("id")
-        or ""
-    ).strip() or None
-    provider_payment_id = str(
-        data.get("transactionId")
-        or data.get("paymentId")
-        or payload.get("transactionId")
-        or payload.get("paymentId")
-        or ""
-    ).strip() or None
-    checkout_url = (
-        data.get("paymentUrl")
-        or data.get("invoiceUrl")
-        or payload.get("paymentUrl")
-        or payload.get("invoiceUrl")
-        or ""
-    )
-    raw_status = normalize_text(
-        data.get("status")
-        or payload.get("status")
-        or payload.get("event")
-        or ""
-    ).lower()
-    product_name = normalize_text(
-        data.get("productName")
-        or payload.get("productName")
-        or data.get("description")
-        or payload.get("description")
-    )
-    paid_at = (
-        parse_epoch_millis(data.get("updatedAt"))
-        or parse_epoch_millis(data.get("paidAt"))
-        or parse_epoch_millis(payload.get("updatedAt"))
-        or parse_epoch_millis(payload.get("paidAt"))
-    )
 
-    payment_status = "pending"
-    subscription_status = "pending"
-    if raw_status in {"paid", "success", "settled", "completed", "true"}:
-        payment_status = "paid"
-        subscription_status = "active"
-    elif raw_status in {"failed", "expired", "cancelled", "canceled"}:
-        payment_status = "failed" if raw_status == "failed" else "expired"
-        subscription_status = "expired" if raw_status == "expired" else "cancelled"
+    raw_status = normalize_text(data.get("status") or payload.get("status") or payload.get("event") or "").lower()
+    
+    if raw_status not in {"paid", "success", "settled", "completed", "true", "active"}:
+        return {"received": True, "status": "ignored_not_paid"}
 
-    plan_code = infer_plan_code(product_name, amount)
-    profile = await fetch_profile_by_email(payer_email) if payer_email else None
-    subscription = None
-    if profile and plan_code:
-        subscription = await upsert_subscription_record(
-            user_id=profile["user_id"],
-            plan_code=plan_code,
-            provider_invoice_id=provider_invoice_id,
-            status=subscription_status,
-            paid_at=paid_at,
+    # Find plan tier from amount
+    tier = "free"
+    for code, plan in PLAN_CATALOG.items():
+        if amount == plan["price_idr"]:
+            tier = code
+            break
+            
+    if tier == "free":
+        return {"received": True, "status": "ignored_unknown_amount"}
+
+    # Find user ID by email via profiles
+    status_code, profiles, _ = await supabase_rest_request("GET", "/rest/v1/profiles", params={"email": f"eq.{payer_email}", "select": "id", "limit": "1"})
+    
+    if status_code == 200 and isinstance(profiles, list) and profiles:
+        user_id = profiles[0]["id"]
+        plan = PLAN_CATALOG[tier]
+        # Update user profile to new tier
+        await supabase_rest_request(
+            "PATCH",
+            f"/rest/v1/profiles?id=eq.{user_id}",
+            payload={"tier": tier, "daily_searches_left": plan["daily_search_limit"], "last_search_reset": datetime.now(timezone.utc).isoformat()}
         )
+        return {"received": True, "provider": "mayar", "status": "upgraded", "email": payer_email, "new_tier": tier}
 
-    transaction = await upsert_payment_transaction(
-        {
-            "user_id": profile.get("user_id") if profile else None,
-            "subscription_id": subscription.get("id") if subscription else None,
-            "provider": "mayar",
-            "provider_invoice_id": provider_invoice_id,
-            "provider_payment_id": provider_payment_id,
-            "checkout_url": checkout_url or None,
-            "amount_idr": amount,
-            "currency": normalize_text(data.get("currency") or payload.get("currency") or "IDR") or "IDR",
-            "status": payment_status,
-            "payer_email": payer_email or None,
-            "raw_payload": payload,
-            "paid_at": paid_at.isoformat() if paid_at else None,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-    )
-
-    return {
-        "received": True,
-        "provider": "mayar",
-        "payment_status": payment_status,
-        "subscription_status": subscription_status,
-        "plan_code": plan_code,
-        "profile_found": bool(profile),
-        "subscription_id": subscription.get("id") if subscription else None,
-        "transaction_id": transaction.get("id") if transaction else None,
-    }
+    return {"received": True, "provider": "mayar", "status": "profile_not_found"}
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page(request: Request):
@@ -2228,16 +2023,12 @@ async def search(
         "results": [r.to_dict() for r in all_results],
     }
     SEARCH_CACHE[cache_key] = (time.time(), payload)
+    
     if user and supabase_rest_configured():
-        await record_usage_event(
-            user["id"],
-            "search",
-            {
-                "keywords": keywords,
-                "platforms": platform_list,
-                "total_results": len(all_results),
-            },
-        )
+        profile = user.get("profile", {})
+        left = int(profile.get("daily_searches_left", 0))
+        if left > 0:
+            await decrement_search_limit(user["id"], left)
     return payload
 
 
@@ -2293,15 +2084,8 @@ async def profile(
         "results": [r.to_dict() for r in results],
     }
     PROFILE_CACHE[cache_key] = (time.time(), payload)
-    if user and supabase_rest_configured():
-        await record_usage_event(
-            user["id"],
-            "profile",
-            {
-                "username": username.lstrip("@"),
-                "total_results": len(results),
-            },
-        )
+    
+    # We skip decrementing profile quota here for the MVP architecture.
     return payload
 
 
@@ -2414,17 +2198,8 @@ async def comments(
         "comments": result,
     }
     COMMENTS_CACHE[cache_key] = (time.time(), payload)
-    if user and supabase_rest_configured():
-        await record_usage_event(
-            user["id"],
-            "comments",
-            {
-                "url": target_url,
-                "requested_max": max_value,
-                "total_results": len(result),
-                "video_comment_count": video_comment_count,
-            },
-        )
+    
+    # We skip decrementing comments quota here for the MVP architecture.
     return payload
 
 
