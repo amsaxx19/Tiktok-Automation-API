@@ -117,7 +117,6 @@ class TikTokScraper(BaseScraper):
         has_transcript = sum(1 for r in results if r.transcript)
         sources = set(r.transcript_source for r in results if r.transcript_source)
         print(f"[TikTok] Transcripts: {has_transcript}/{len(results)} (sources: {', '.join(sources) or 'none'})")
-
         if sort == "popular":
             results.sort(key=lambda r: r.views or 0, reverse=True)
         elif sort == "latest":
@@ -466,7 +465,6 @@ class TikTokScraper(BaseScraper):
                 return " ".join(lines).strip()
         except Exception:
             return ""
-
     @classmethod
     async def _extract_transcript(cls, item: dict) -> tuple[str, str]:
         """Extract transcript from TikTok item data. Returns (transcript, source)."""
