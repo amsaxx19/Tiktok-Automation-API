@@ -1530,10 +1530,10 @@ async def signup_page():
         secondary_label="Sudah punya akun? Masuk di sini",
         secondary_href="/signin",
         form_fields="""
-        <div class="field"><label>Nama lengkap</label><input id="signupFullName" type="text" placeholder="Nama kamu atau nama tim"></div>
-        <div class="field"><label>Nama usaha / tim</label><input id="signupCompanyName" type="text" placeholder="Nama brand atau agency"></div>
-        <div class="field"><label>Email kerja</label><input id="signupEmail" type="email" placeholder="nama@brand.com"></div>
-        <div class="field"><label>Password</label><input id="signupPassword" type="password" placeholder="Minimal 8 karakter"></div>
+        <div class="field"><label>Nama lengkap</label><input id="signupFullName" type="text" placeholder="Nama kamu atau nama tim" required></div>
+        <div class="field"><label>Nama usaha / tim</label><input id="signupCompanyName" type="text" placeholder="Nama brand atau agency" required></div>
+        <div class="field"><label>Email kerja</label><input id="signupEmail" type="email" placeholder="nama@brand.com" required></div>
+        <div class="field"><label>Password</label><input id="signupPassword" type="password" placeholder="Minimal 8 karakter" minlength="8" required></div>
         <div class="field"><label>Kamu pakai untuk apa?</label><select id="signupUseCase"><option>Riset konten</option><option>Vetting creator</option><option>Agency / tim sosial media</option><option>UMKM / brand</option></select></div>
         <div id="signupStatus" class="note">Isi data di bawah, lalu lanjut ke langkah berikutnya.</div>
         """,
@@ -1549,14 +1549,18 @@ async def signup_page():
         <script>
         document.querySelector('.submit')?.addEventListener('click', async () => {
           const status = document.getElementById('signupStatus');
+          const fullName = document.getElementById('signupFullName').value.trim();
+          const companyName = document.getElementById('signupCompanyName').value.trim();
+          const email = document.getElementById('signupEmail').value.trim();
+          const password = document.getElementById('signupPassword').value;
+          const useCase = document.getElementById('signupUseCase').value;
+          // Frontend validation
+          if (!fullName) { status.textContent = 'Nama lengkap wajib diisi.'; return; }
+          if (!companyName) { status.textContent = 'Nama usaha / tim wajib diisi.'; return; }
+          if (!email || !email.includes('@')) { status.textContent = 'Email tidak valid.'; return; }
+          if (password.length < 8) { status.textContent = 'Password minimal 8 karakter.'; return; }
           status.textContent = 'Lagi bikin akun...';
-          const payload = {
-            full_name: document.getElementById('signupFullName').value,
-            company_name: document.getElementById('signupCompanyName').value,
-            email: document.getElementById('signupEmail').value,
-            password: document.getElementById('signupPassword').value,
-            onboarding_use_case: document.getElementById('signupUseCase').value,
-          };
+          const payload = { full_name: fullName, company_name: companyName, email, password, onboarding_use_case: useCase };
           const res = await fetch('/api/auth/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1603,10 +1607,15 @@ async def signin_page():
         <script>
         document.querySelector('.submit')?.addEventListener('click', async () => {
           const status = document.getElementById('signinStatus');
+          const email = document.getElementById('signinEmail').value.trim();
+          const password = document.getElementById('signinPassword').value;
+          // Frontend validation
+          if (!email || !email.includes('@')) { status.textContent = 'Email tidak valid.'; return; }
+          if (!password) { status.textContent = 'Password wajib diisi.'; return; }
           status.textContent = 'Lagi masuk...';
           const payload = {
-            email: document.getElementById('signinEmail').value,
-            password: document.getElementById('signinPassword').value,
+            email,
+            password,
           };
           const res = await fetch('/api/auth/signin', {
             method: 'POST',
@@ -1682,6 +1691,25 @@ async def auth_signup(request: Request, payload: dict = Body(...)):
             },
         },
     )
+    # Auto-confirm email via Admin API so users don't need to click a confirmation email
+    user_id = (data.get("user") or {}).get("id")
+    if status_code in (200, 201) and user_id and supabase_rest_configured():
+        svc_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        supa_url = os.getenv("SUPABASE_URL", "").strip()
+        if svc_key and supa_url:
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    await client.put(
+                        f"{supa_url}/auth/v1/admin/users/{user_id}",
+                        headers={
+                            "apikey": svc_key,
+                            "Authorization": f"Bearer {svc_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={"email_confirm": True},
+                    )
+            except Exception:
+                pass  # Non-fatal: user can confirm via email if admin call fails
     response = JSONResponse(data, status_code=status_code)
     session = data.get("session") or {}
     set_auth_cookies(response, session.get("access_token"), session.get("refresh_token"))
