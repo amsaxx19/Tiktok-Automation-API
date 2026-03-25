@@ -3509,6 +3509,8 @@ APP_HTML = """<!DOCTYPE html>
     .theme-transition, aside, main, header, .tab-btn, .ds-input {
         transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
     }
+    .tab-section[style*="block"] { display: block !important; }
+    .tab-section[style*="none"] { display: none !important; }
 </style>
 </head>
 <body class="bg-background text-on-surface custom-scrollbar">
@@ -3529,26 +3531,26 @@ APP_HTML = """<!DOCTYPE html>
             </div>
         </div>
         <nav class="flex-1 space-y-1">
-            <button class="tab-btn active w-full flex items-center gap-3 text-tab-text rounded-xl px-4 py-3 font-manrope font-semibold text-sm transition-all hover:bg-surface-container-low hover:text-primary" onclick="switchTab('dashboard', this)">
+            <a href="#dashboard" class="tab-btn active w-full flex items-center gap-3 text-tab-text rounded-xl px-4 py-3 font-manrope font-semibold text-sm transition-all hover:bg-surface-container-low hover:text-primary no-underline" data-tab="dashboard">
                 <span class="material-symbols-outlined" data-icon="insights">insights</span>
                 <span>Beranda</span>
-            </button>
-            <button class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all" onclick="switchTab('search', this)">
+            </a>
+            <a href="#search" class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all no-underline" data-tab="search">
                 <span class="material-symbols-outlined" data-icon="search">search</span>
                 <span>Riset</span>
-            </button>
-            <button class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all" onclick="switchTab('profile', this)">
+            </a>
+            <a href="#profile" class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all no-underline" data-tab="profile">
                 <span class="material-symbols-outlined" data-icon="movie_filter">movie_filter</span>
                 <span>Profil</span>
-            </button>
-            <button class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all" onclick="switchTab('comments', this)">
+            </a>
+            <a href="#comments" class="tab-btn w-full flex items-center gap-3 text-tab-text px-4 py-3 rounded-xl border-r-4 border-transparent font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all no-underline" data-tab="comments">
                 <span class="material-symbols-outlined" data-icon="forum">forum</span>
                 <span>Komentar</span>
-            </button>
-            <button class="w-full flex items-center gap-3 text-tab-text px-4 py-3 font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all mt-auto" onclick="window.location.href='/payment'">
+            </a>
+            <a href="/payment" class="w-full flex items-center gap-3 text-tab-text px-4 py-3 font-manrope font-semibold text-sm hover:bg-surface-container-low hover:text-primary transition-all mt-auto no-underline">
                 <span class="material-symbols-outlined" data-icon="settings">settings</span>
                 <span>Billing</span>
-            </button>
+            </a>
         </nav>
         <div class="mt-8 p-4 bg-surface-container-high rounded-xl border border-outline-variant/20">
             <p class="text-xs text-on-surface-variant mb-3">Professional analytics for the top 1% of creators.</p>
@@ -3592,21 +3594,21 @@ APP_HTML = """<!DOCTYPE html>
 
                 <!-- Quick actions -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <button onclick="switchTab('search', this)" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group" style="box-shadow: var(--card-shadow);">
-                        <span class="material-symbols-outlined text-3xl text-primary mb-3 block" style="font-variation-settings: 'FILL' 1;">search</span>
-                        <h3 class="text-base font-bold font-headline text-on-surface group-hover:text-primary transition-colors">Riset Keyword</h3>
-                        <p class="text-xs text-on-surface-variant mt-1">Cari video dari TikTok, YouTube, Instagram, X, dan Facebook sekaligus.</p>
-                    </button>
-                    <button onclick="switchTab('profile', this)" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group" style="box-shadow: var(--card-shadow);">
-                        <span class="material-symbols-outlined text-3xl text-primary mb-3 block" style="font-variation-settings: 'FILL' 1;">person_search</span>
-                        <h3 class="text-base font-bold font-headline text-on-surface group-hover:text-primary transition-colors">Analisis Profil</h3>
-                        <p class="text-xs text-on-surface-variant mt-1">Lihat performa konten creator tertentu, temukan pattern dan hook terbaik.</p>
-                    </button>
-                    <button onclick="switchTab('comments', this)" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group" style="box-shadow: var(--card-shadow);">
-                        <span class="material-symbols-outlined text-3xl text-primary mb-3 block" style="font-variation-settings: 'FILL' 1;">forum</span>
-                        <h3 class="text-base font-bold font-headline text-on-surface group-hover:text-primary transition-colors">Baca Komentar</h3>
-                        <p class="text-xs text-on-surface-variant mt-1">Ekstrak komentar dari video manapun, lihat sentiment dan feedback audience.</p>
-                    </button>
+                    <a href="#search" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group no-underline" style="box-shadow: var(--card-shadow);">
+                        <span class="material-symbols-outlined text-2xl text-primary mb-3" style="font-variation-settings:'FILL' 1;">search</span>
+                        <h4 class="text-sm font-bold mb-1 group-hover:text-primary transition-colors">Riset Keyword</h4>
+                        <p class="text-xs text-on-surface-variant leading-relaxed">Cari video dari TikTok, YouTube, Instagram, X, dan Facebook sekaligus.</p>
+                    </a>
+                    <a href="#profile" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group no-underline" style="box-shadow: var(--card-shadow);">
+                        <span class="material-symbols-outlined text-2xl text-primary mb-3" style="font-variation-settings:'FILL' 1;">person_search</span>
+                        <h4 class="text-sm font-bold mb-1 group-hover:text-primary transition-colors">Analisis Profil</h4>
+                        <p class="text-xs text-on-surface-variant leading-relaxed">Lihat performa konten creator tertentu, temukan pattern dan hook terbaik.</p>
+                    </a>
+                    <a href="#comments" class="bg-surface-container-low rounded-xl p-6 border border-outline-variant/10 text-left hover:border-primary/40 transition-all group no-underline" style="box-shadow: var(--card-shadow);">
+                        <span class="material-symbols-outlined text-2xl text-primary mb-3" style="font-variation-settings:'FILL' 1;">chat</span>
+                        <h4 class="text-sm font-bold mb-1 group-hover:text-primary transition-colors">Baca Komentar</h4>
+                        <p class="text-xs text-on-surface-variant leading-relaxed">Ekstrak komentar dari video manapun, lihat sentiment dan feedback audience.</p>
+                    </a>
                 </div>
 
                 <!-- Supported platforms -->
@@ -3810,8 +3812,8 @@ APP_HTML = """<!DOCTYPE html>
     }
     updateThemeIcon();
 
-    /* ===== TAB SWITCHING ===== */
-    function switchTab(name, el){
+    /* ===== TAB SWITCHING (hash-based) ===== */
+    function switchTab(name){
       closeSidebar();
       document.querySelectorAll('.tab-btn').forEach(b=>{
           b.classList.remove('active');
@@ -3819,30 +3821,36 @@ APP_HTML = """<!DOCTYPE html>
               b.classList.add('border-transparent');
           }
       });
-      if (el) {
-          el.classList.add('active');
-          el.classList.remove('border-transparent');
+      const activeBtn = document.querySelector('.tab-btn[data-tab="' + name + '"]');
+      if (activeBtn) {
+          activeBtn.classList.add('active');
+          activeBtn.classList.remove('border-transparent');
       }
       
-      const sections = {
-        dashboard: document.getElementById('dashboardTab'),
-        search: document.getElementById('searchTab'),
-        profile: document.getElementById('profileTab'),
-        comments: document.getElementById('commentsTab')
-      };
-      
-      Object.entries(sections).forEach(([k,v])=> {
-          if (v) {
-              if (k === name) {
-                  v.classList.remove('hidden');
-                  v.style.display = 'block';
-              } else {
-                  v.classList.add('hidden');
-                  v.style.display = 'none';
-              }
+      ['dashboardTab','searchTab','profileTab','commentsTab'].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const tabName = id.replace('Tab','');
+          if (tabName === name) {
+              el.classList.remove('hidden');
+              el.style.setProperty('display', 'block', 'important');
+          } else {
+              el.classList.add('hidden');
+              el.style.setProperty('display', 'none', 'important');
           }
       });
     }
+    function handleHash() {
+      const hash = (location.hash || '#dashboard').replace('#', '');
+      const valid = ['dashboard','search','profile','comments'];
+      console.log('[Sinyal] handleHash:', hash);
+      switchTab(valid.includes(hash) ? hash : 'dashboard');
+    }
+    window.addEventListener('hashchange', handleHash);
+    // Run after Tailwind CDN finishes processing (it loads async in <head>)
+    setTimeout(handleHash, 100);
+    setTimeout(handleHash, 500);
+    window.addEventListener('load', handleHash);
 
     /* ===== XSS PROTECTION ===== */
     function escapeHTML(str) {
@@ -3898,8 +3906,8 @@ APP_HTML = """<!DOCTYPE html>
                 <span class="material-symbols-outlined text-sm">content_copy</span> Copy
             </button>
         </div>
-        ${caption ? '<div class="mb-3"><p id="cap_' + rid + '" class="text-xs text-on-surface-variant leading-relaxed line-clamp-2">' + caption + '</p>' + (caption.length > 120 ? '<button onclick="document.getElementById(\'cap_' + rid + '\').classList.toggle(\'line-clamp-2\');this.textContent=this.textContent===\'Selengkapnya\'?\'Tutup\':\'Selengkapnya\'" class="text-[10px] text-primary font-bold mt-1 hover:underline">Selengkapnya</button>' : '') + '</div>' : ''}
-        ${transcript ? '<div class="mb-3 bg-surface-container-highest rounded-lg px-3 py-2 border-l-2 border-primary/30"><div class="flex items-center justify-between mb-1"><span class="text-primary font-bold text-[10px] uppercase">Transcript</span>' + (transcript.length > 150 ? '<button onclick="const el=document.getElementById(\'tr_' + rid + '\');const f=document.getElementById(\'trf_' + rid + '\');if(el.classList.contains(\'hidden\')){el.classList.remove(\'hidden\');f.classList.add(\'hidden\');this.textContent=\'Tutup\'}else{el.classList.add(\'hidden\');f.classList.remove(\'hidden\');this.textContent=\'Baca semua\'}" class="text-[10px] text-primary font-bold hover:underline">Baca semua</button>' : '') + '</div><p id="trf_' + rid + '" class="text-[11px] text-on-surface-variant italic">' + transcriptShort + '</p><p id="tr_' + rid + '" class="text-[11px] text-on-surface-variant italic hidden">' + transcript + '</p></div>' : ''}
+        ${caption ? `<div class="mb-3"><p id="cap_${rid}" class="text-xs text-on-surface-variant leading-relaxed line-clamp-2">${caption}</p>${caption.length > 120 ? `<button onclick="document.getElementById('cap_${rid}').classList.toggle('line-clamp-2');this.textContent=this.textContent==='Selengkapnya'?'Tutup':'Selengkapnya'" class="text-[10px] text-primary font-bold mt-1 hover:underline">Selengkapnya</button>` : ''}</div>` : ''}
+        ${transcript ? `<div class="mb-3 bg-surface-container-highest rounded-lg px-3 py-2 border-l-2 border-primary/30"><div class="flex items-center justify-between mb-1"><span class="text-primary font-bold text-[10px] uppercase">Transcript</span>${transcript.length > 150 ? `<button onclick="const el=document.getElementById('tr_${rid}');const f=document.getElementById('trf_${rid}');if(el.classList.contains('hidden')){el.classList.remove('hidden');f.classList.add('hidden');this.textContent='Tutup'}else{el.classList.add('hidden');f.classList.remove('hidden');this.textContent='Baca semua'}" class="text-[10px] text-primary font-bold hover:underline">Baca semua</button>` : ''}</div><p id="trf_${rid}" class="text-[11px] text-on-surface-variant italic">${transcriptShort}</p><p id="tr_${rid}" class="text-[11px] text-on-surface-variant italic hidden">${transcript}</p></div>` : ''}
         <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex gap-4">
                 <span class="text-[10px] text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-sm">visibility</span><strong class="text-on-surface">${formatNum(item.views)}</strong></span>
