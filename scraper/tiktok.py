@@ -485,8 +485,15 @@ class TikTokScraper(BaseScraper):
         video = item.get("video", {})
         subtitle_infos = video.get("subtitleInfos", []) or []
         if subtitle_infos:
-            # Prefer English, then any language
-            sorted_subs = sorted(subtitle_infos, key=lambda s: (0 if "en" in s.get("LanguageCodeName", "").lower() else 1))
+            # Prefer original language: Indonesian first, then any non-English, then English
+            def _sub_sort_key(s):
+                lang = s.get("LanguageCodeName", "").lower()
+                if "id" in lang or "ind" in lang:
+                    return 0  # Indonesian first
+                if "en" not in lang:
+                    return 1  # Other non-English languages
+                return 2  # English last
+            sorted_subs = sorted(subtitle_infos, key=_sub_sort_key)
             for sub_info in sorted_subs:
                 sub_url = sub_info.get("Url") or sub_info.get("url") or sub_info.get("UrlExpire") or ""
                 if sub_url:

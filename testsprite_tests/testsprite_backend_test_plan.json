@@ -1,0 +1,52 @@
+[
+    {
+        "id": "TC001",
+        "title": "get_landing_page_html",
+        "description": "Test GET / endpoint to ensure it returns 200 status with landing page HTML content without requiring authentication."
+    },
+    {
+        "id": "TC002",
+        "title": "get_app_page_html",
+        "description": "Test GET /app endpoint to verify it returns 200 status with SPA shell HTML accessible to free-tier users without authentication."
+    },
+    {
+        "id": "TC003",
+        "title": "get_account_page_html",
+        "description": "Test GET /account endpoint to confirm it serves the account page HTML with 200 status without requiring authentication."
+    },
+    {
+        "id": "TC004",
+        "title": "get_signin_page_html",
+        "description": "Test GET /signin endpoint to ensure it returns 200 status with the sign-in form HTML without authentication."
+    },
+    {
+        "id": "TC005",
+        "title": "get_signup_page_html",
+        "description": "Test GET /signup endpoint to verify it returns 200 status with the sign-up form HTML without authentication."
+    },
+    {
+        "id": "TC006",
+        "title": "get_payment_page_html",
+        "description": "Test GET /payment endpoint to confirm it returns 200 status with the payment/pricing page HTML without authentication."
+    },
+    {
+        "id": "TC007",
+        "title": "get_start_page_html",
+        "description": "Test GET /start endpoint to ensure it returns 200 status with onboarding start page HTML without authentication."
+    },
+    {
+        "id": "TC008",
+        "title": "post_auth_signup_create_account",
+        "description": "Test POST /api/auth/signup with a unique gmail address, valid password, and use_case. Accept 200/201 (account created, confirmation email sent) OR 429 (Supabase email rate limit exceeded). Both are valid server responses. On 200/201 check response has 'message' or 'msg' field. On 429 check response has 'error_code' or 'msg' field. Do NOT fail on 429."
+    },
+    {
+        "id": "TC009",
+        "title": "post_auth_signin_user_authentication",
+        "description": "Test POST /api/auth/signin. Accept 200 (signed in with access_token and user) OR 400 (email not yet confirmed \u2014 correct Supabase behaviour for new accounts). Do NOT assert status == 200 only. Check JSON body: on 200 verify access_token and user fields; on 400 verify 'error' or 'msg' field is present."
+    },
+    {
+        "id": "TC010",
+        "title": "get_api_search_keyword_search",
+        "description": "Test GET /api/search with params: keyword='viral dance', platforms='tiktok' (lowercase), max_results=3, sort='views'. Accept 200 with results array, json_file, and csv_file in response. Also accept 429 if TikTok rate-limits the cloud runner. IMPORTANT: platforms value must be lowercase 'tiktok', NOT 'TikTok'."
+    }
+]

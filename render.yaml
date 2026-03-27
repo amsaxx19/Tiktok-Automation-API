@@ -1,8 +1,35 @@
 services:
   - type: web
-    name: scrapeflow-api
+    name: sinyal
     runtime: docker
-    plan: free
+    plan: starter
+    healthCheckPath: /health
     envVars:
       - key: PORT
         value: "8000"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SCRAPE_TIMEOUT_SECONDS
+        value: "45"
+      - key: PROFILE_CACHE_TTL_SECONDS
+        value: "900"
+      - key: SEARCH_CACHE_TTL_SECONDS
+        value: "900"
+      - key: COMMENTS_CACHE_TTL_SECONDS
+        value: "900"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: MAYAR_URL_STARTER
+        sync: false
+      - key: MAYAR_URL_PRO
+        sync: false
+      - key: MAYAR_URL_LIFETIME
+        sync: false
+      - key: MAYAR_WEBHOOK_SECRET
+        sync: false
+      - key: TIKTOK_COOKIE
+        sync: false

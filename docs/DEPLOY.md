@@ -23,40 +23,41 @@ SEARCH_CACHE_TTL_SECONDS=900
 COMMENTS_CACHE_TTL_SECONDS=900
 COOKIE_SECURE=true
 
-SUPABASE_URL=https://banazgsnguqztoxqrgmb.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_ehw0NANv16Az-A8aeekOHg_TEwqDiCY
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 
-MAYAR_URL_RINGAN=
-MAYAR_URL_TUMBUH=
-MAYAR_URL_TIM=
+MAYAR_URL_STARTER=
+MAYAR_URL_PRO=
+MAYAR_URL_LIFETIME=
 MAYAR_WEBHOOK_SECRET=
+
+TIKTOK_COOKIE=
 ```
 
 ## 3. Supabase SQL
 
-Schema sekarang sudah ada juga di folder migration Supabase:
+Schema ada di folder `supabase/migrations/`. Jalankan semua migration secara berurutan:
 
-- [20260318220000_init_schema.sql](/Users/amosthiosa/Documents/Playground/supabase/migrations/20260318220000_init_schema.sql)
+```bash
+npx supabase db push
+```
 
-Kalau deploy project baru, bisa pakai salah satu:
-
-- `npx supabase db push`
-- atau paste [schema.sql](/Users/amosthiosa/Documents/Playground/db/schema.sql) ke SQL Editor
+Atau paste isi setiap file di `supabase/migrations/` ke Supabase SQL Editor, urut dari yang paling lama.
 
 ## 4. Mayar Setup
 
 Buat 3 checkout page / product page di Mayar:
 
-- Paket Ringan
-- Paket Tumbuh
-- Paket Tim
+- Starter (Rp49.000/bulan)
+- Pro (Rp99.000/bulan)
+- Lifetime Deal (Rp299.000 sekali bayar)
 
 Ambil URL publiknya, lalu isi:
 
-- `MAYAR_URL_RINGAN`
-- `MAYAR_URL_TUMBUH`
-- `MAYAR_URL_TIM`
+- `MAYAR_URL_STARTER`
+- `MAYAR_URL_PRO`
+- `MAYAR_URL_LIFETIME`
 
 ## 5. Auth Flow Test
 
@@ -67,6 +68,8 @@ Setelah env Supabase terisi:
 3. Buka `/signin`
 4. Login
 5. Pastikan `/app` bisa diakses
+
+> **Tip**: Supabase free tier limit email 4/jam. Aktifkan custom SMTP di Supabase Dashboard → Authentication → Settings untuk production.
 
 ## 6. Payment Flow Test
 
@@ -89,7 +92,7 @@ Webhook sekarang sudah:
 - verifikasi shared secret sederhana
 - simpan `payment_transactions`
 - update `subscriptions`
-- infer `plan_code` dari nama produk / nominal
+- infer `plan_code` dari nominal pembayaran
 
 ## 8. Next Backend Work
 
