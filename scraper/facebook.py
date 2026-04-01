@@ -1,7 +1,9 @@
 import re
 import asyncio
 from urllib.parse import quote
+
 from scrapling.fetchers import AsyncStealthySession
+
 from scraper.base import BaseScraper
 from scraper.models import VideoResult
 
@@ -19,11 +21,11 @@ class FacebookScraper(BaseScraper):
             response = await session.fetch(
                 url,
                 wait_selector='a[href*="/videos/"], a[href*="/reel/"]',
-                timeout=15000,
+                timeout=25000,
             )
             if response.status != 200:
                 print(f"[Facebook] Failed with status {response.status}")
-                return []
+                return await self._fallback_search(keyword, max_results)
 
             # Extract video/reel URLs
             video_links = response.css('a[href*="/videos/"], a[href*="/reel/"]')
@@ -79,8 +81,50 @@ class FacebookScraper(BaseScraper):
                 else:
                     completed += 1
 
+        if len(results) < max_results:
+            fallback_results = await self._fallback_search(keyword, max_results - len(results))
+            seen_urls = {item.video_url for item in results}
+            for item in fallback_results:
+                if item.video_url not in seen_urls:
+                    results.append(item)
+                    seen_urls.add(item.video_url)
+                if len(results) >= max_results:
+                    break
+
         print(f"[Facebook] Enriched {completed}/{len(results)} videos")
         return results
+
+    async def _fallback_search(self, keyword: str, max_results: int) -> list[VideoResult]:
+        if max_results <= 0:
+            return []
+        print(f"[Facebook] Falling back to Google discovery for: {keyword}")
+        async with AsyncStealthySession(headless=True) as session:
+            urls = await self._google_discover_urls(
+                session,
+                f'site:facebook.com ("/videos/" OR "/reel/") {keyword}',
+                ["facebook.com"],
+                ["/videos/", "/reel/"],
+                max_results=max_results,
+            )
+            if not urls:
+                return [
+                    self._make_placeholder_result(
+                        keyword,
+                        f"https://www.facebook.com/search/videos?q={quote(keyword)}",
+                        title=f"Facebook search fallback: {keyword}",
+                        description=f"Fallback link ke pencarian Facebook untuk keyword '{keyword}'.",
+                    )
+                ]
+
+            results = []
+            for item_url in urls[:max_results]:
+                result = VideoResult(platform="facebook", keyword=keyword, video_url=item_url)
+                await self._enrich_video(session, result)
+                if result.title or result.description or result.author:
+                    results.append(result)
+                else:
+                    results.append(self._make_placeholder_result(keyword, item_url, title=f"Video Facebook: {keyword}"))
+            return results[:max_results]
 
     async def _enrich_video(self, session: AsyncStealthySession, result: VideoResult):
         response = await session.fetch(
@@ -101,6 +145,12 @@ class FacebookScraper(BaseScraper):
         result.title = meta.get("og:title", "")[:100]
         result.description = meta.get("og:description", "")
         result.thumbnail = meta.get("og:image", "")
+
+        # Use description/caption as transcript fallback for Facebook Reels
+        desc_clean = re.sub(r"https?://\S+", "", result.description or "").strip()
+        if len(desc_clean) > 30:
+            result.transcript = desc_clean
+            result.transcript_source = "caption"
 
         # Prefer page identity from metadata. Reel/watch path segments are not authors.
         if not result.author:

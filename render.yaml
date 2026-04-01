@@ -10,7 +10,7 @@ services:
       - key: COOKIE_SECURE
         value: "true"
       - key: SCRAPE_TIMEOUT_SECONDS
-        value: "45"
+        value: "90"
       - key: PROFILE_CACHE_TTL_SECONDS
         value: "900"
       - key: SEARCH_CACHE_TTL_SECONDS

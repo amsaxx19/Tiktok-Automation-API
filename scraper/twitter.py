@@ -82,6 +82,11 @@ class TwitterScraper(BaseScraper):
         except Exception:
             pass
 
+        # Use tweet body as transcript (spoken content / caption equivalent)
+        tweet_text = re.sub(r"https?://\S+", "", description).strip()
+        transcript = tweet_text if len(tweet_text) > 20 else ""
+        transcript_source = "tweet_text" if transcript else ""
+
         return VideoResult(
             platform="twitter",
             keyword=keyword,
@@ -90,4 +95,6 @@ class TwitterScraper(BaseScraper):
             description=description,
             author=author,
             author_url=f"https://x.com/{username}",
+            transcript=transcript,
+            transcript_source=transcript_source,
         )

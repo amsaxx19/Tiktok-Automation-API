@@ -1,0 +1,124 @@
+{
+  "url": "https://www.tiktok.com/api/v1/web-cookie-privacy/config?locale=id-ID&appId=1988&theme=default&tea=1",
+  "status": 200,
+  "content_type": "application/json; charset=utf-8",
+  "timing": "11.2s",
+  "has_product_data": false,
+  "body": {
+    "statusCode": 200,
+    "body": {
+      "i18n": {
+        "cookieBannerTitle": "Izinkan cookie dari TikTok di browser ini?",
+        "cookieBannerSubTitle": "TikTok menggunakan cookie dan teknologi serupa untuk menyediakan, meningkatkan, melindungi, dan menganalisis layanan kami. Cookie esensial dibutuhkan agar situs kami dapat bekerja sebagaimana mestinya. Dengan memilih \"Izinkan semua\", Anda mengizinkan kami untuk menggunakan cookie opsional untuk tujuan tambahan, seperti mengukur efektivitas dan relevansi iklan, termasuk iklan yang dipersonalisasi di TikTok.com, tergantung pengaturan Anda. Cookie opsional juga membantu kami melakukan hal-hal lain, seperti mengukur performa kampanye periklanan kami di TikTok.com dengan lebih baik. Pelajari selengkapnya tentang cara kami menggunakan cookie dan mengelola pilihan Anda di <a href=\"https://www.tiktok.com/legal/tiktok-website-cookies-policy?lang=id-ID\" target=\"_blank\" rel=\"noopener noreferrer\">Kebijakan Cookie</a> kami.",
+        "cookieBannerBtnAccept": "Izinkan semua",
+        "cookieBannerBtnDecline": "Tolak cookie opsional",
+        "cookieBannerSaveToast": "Tersimpan!",
+        "cookieSettingSaveBtn": "Simpan",
+        "cookieSettingsTitle": "Kelola cookie",
+        "cookieSettingsSubTitle": "Ubah pengaturan cookie Anda untuk mengizinkan atau menolak cookie opsional.",
+        "cookieSettingsFooter": "Pelajari selengkapnya di <a href=\"https://www.tiktok.com/legal/tiktok-website-cookies-policy?lang=id-ID\" target=\"_blank\" rel=\"noopener noreferrer\">Kebijakan Cookie</a> kami"
+      },
+      "appProps": {
+        "region": "ID",
+        "idcRegion": "ALL_SG"
+      },
+      "cookieBanner": {
+        "resource": {
+          "esm": "/pns/tiktok-cookie-banner/1.0.0.285/default.esm.js",
+          "nomodule": "/pns/tiktok-cookie-banner/1.0.0.285/default.js",
+          "baseUrl": "https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static",
+          "version": "1.0.0.285"
+        },
+        "settings": [
+          {
+            "groupName": "Cookie opsional",
+            "groupDescription": "Dengan persetujuan Anda, kami menggunakan cookie opsional untuk tujuan tambahan, seperti mengukur efektivitas dan relevansi iklan, termasuk iklan yang dipersonalisasi di TikTok.com, tergantung pengaturan Anda. Cookie opsional juga membantu kami mengukur performa kampanye periklanan kami di TikTok.com dengan lebih baik.",
+            "disabled": false,
+            "items": {},
+            "groupEntityKeys": [
+              {
+                "entityKey": "optional"
+              },
+              {
+                "entityKey": "ga"
+              },
+              {
+                "entityKey": "af"
+              },
+              {
+                "entityKey": "fbp"
+              },
+              {
+                "entityKey": "lip"
+              },
+              {
+                "entityKey": "bing"
+              },
+              {
+                "entityKey": "ttads"
+              },
+              {
+                "entityKey": "reddit"
+              },
+              {
+                "entityKey": "hubspot"
+              }
+            ]
+          },
+          {
+            "groupName": "Cookie esensial",
+            "groupDescription": "Cookie esensial diperlukan agar TikTok dapat berfungsi sebagaimana mestinya. Cookie ini termasuk cookie yang diperlukan untuk menyediakan, meningkatkan, melindungi, dan menganalisis layanan kami.",
+            "disabled": true,
+            "items": {}
+          }
+        ],
+        "disabled": false,
+        "isEffective": false,
+        "version": "v10",
+        "disabledAccessKeys": [
+          {
+            "path": ".",
+            "accessKeys": [
+              "*"
+            ]
+          }
+        ]
+      },
+      "consent": {
+        "domain": "https://www.tiktok.com",
+        "appId": 1988,
+        "entityKeys": {
+          "optional": [
+            "data-cookie-optional"
+          ]
+        },
+        "mode": "production",
+        "fetchDataAtInit": false,
+        "api": {
+          "consent": {
+            "fetch": {
+              "version": "v2"
+            },
+            "update": {
+              "version": "v2"
+            }
+          }
+        },
+        "wid": "7622635127713220113",
+        "collectionPointId": "737326081028"
+      },
+      "tea": {
+        "channel": "sg",
+        "channel_type": "tcpy",
+        "channel_domain": "https://mcs-sg.tiktokv.com"
+      },
+      "tenantId": "paas_tiktok",
+      "monitorConfig": {
+        "slardar": {
+          "domain": "https://mon.tiktokv.com",
+          "pluginPathPrefix": "https://sf16-website-login.neutral.ttwstatic.com/obj/tiktok_web_login_static/slardar/fe/sdk-web/plugins"
+        }
+      }
+    }
+  }
+}

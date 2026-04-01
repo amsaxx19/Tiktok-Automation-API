@@ -1,0 +1,1189 @@
+[
+  {
+    "id": "TC001",
+    "title": "Landing page loads primary marketing sections",
+    "description": "Verifies the landing page renders core marketing content for first-time visitors.",
+    "category": "Landing Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the hero section is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pricing section is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Toggle interactive demo panel across all modes",
+    "description": "Verifies the demo panel can be toggled between the three demo modes and updates the displayed demo content.",
+    "category": "Landing Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Toggle the demo panel to the Lagi rame mode"
+      },
+      {
+        "type": "action",
+        "description": "Toggle the demo panel to the Vetting creator mode"
+      },
+      {
+        "type": "action",
+        "description": "Toggle the demo panel to the Baca komentar mode"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the demo panel content updates to reflect the selected mode"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Switch use-case tabs across all options",
+    "description": "Verifies the use-case tabs switch content for UMKM, Agency, and Creator Scout.",
+    "category": "Landing Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Switch the use-case tab to UMKM"
+      },
+      {
+        "type": "action",
+        "description": "Switch the use-case tab to Agency"
+      },
+      {
+        "type": "action",
+        "description": "Switch the use-case tab to Creator Scout"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the use-case content updates to match the selected tab"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Primary CTA navigates to signup",
+    "description": "Verifies the main Mulai Gratis call-to-action takes the user to the registration page.",
+    "category": "Landing Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Click the Mulai Gratis call-to-action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the signup page"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Smooth-scroll to pricing via Lihat Harga CTA and view pricing grid",
+    "description": "Verifies that the Lihat Harga action moves the user to the pricing section where the pricing grid is visible.",
+    "category": "Landing Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Click the Lihat Harga call-to-action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pricing grid is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Pricing plan CTA starts signup flow",
+    "description": "Verifies that selecting a pricing plan from the pricing section initiates an onboarding action leading to signup.",
+    "category": "Landing Page",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Scroll to the pricing section"
+      },
+      {
+        "type": "action",
+        "description": "Click a pricing plan call-to-action button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the signup page or an external checkout is opened"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Top navigation link to sign-in works",
+    "description": "Verifies that the landing page navigation provides a route to the sign-in page.",
+    "category": "Landing Page",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link to sign in"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the sign-in page"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Mobile hamburger menu opens navigation options",
+    "description": "Verifies the mobile menu can be opened to access navigation items on small screens.",
+    "category": "Landing Page",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Resize the viewport to a small mobile width"
+      },
+      {
+        "type": "action",
+        "description": "Open the mobile hamburger menu"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the mobile navigation menu is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Successful signup redirects to getting started",
+    "description": "Verifies a new user can register and is redirected to the /start onboarding page.",
+    "category": "User Signup",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the full name field with Test User Signup"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the company/brand name field with Test Brand"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with testuser+signup1@example.com"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with a valid password"
+      },
+      {
+        "type": "action",
+        "description": "Select a use case"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the getting started page"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Signup shows validation error for malformed email",
+    "description": "Verifies invalid email input is rejected with an inline error message.",
+    "category": "User Signup",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with invalid-email-format"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with a valid password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an inline email validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Signup requires password to be provided",
+    "description": "Verifies submitting the signup form without a password shows an inline error state.",
+    "category": "User Signup",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with testuser+signup2@example.com"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a password validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Signup requires email to be provided",
+    "description": "Verifies submitting the signup form without an email shows an inline error state.",
+    "category": "User Signup",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with a valid password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an email validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Use case selection is enforced when present",
+    "description": "Verifies the form prevents submission when use-case selection is required and not chosen.",
+    "category": "User Signup",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the full name field with Test User No Use Case"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with testuser+signup3@example.com"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with a valid password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the registration form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a use-case selection validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Navigate from signup to sign-in via page link",
+    "description": "Verifies users can switch from registration to the login page via an in-page navigation link.",
+    "category": "User Signup",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to sign in instead"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the sign-in page"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Successful sign-in redirects to app workspace",
+    "description": "Verifies an existing user can log in and is redirected to the /app dashboard.",
+    "category": "User Signin",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the main app dashboard"
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Invalid password shows authentication error",
+    "description": "Verifies incorrect credentials display an inline error without redirecting into the app.",
+    "category": "User Signin",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with wrong-password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an invalid credentials error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Malformed email prevents sign-in submission",
+    "description": "Verifies client-side validation rejects malformed email input.",
+    "category": "User Signin",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with invalid-email-format"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an email validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Sign-in requires password",
+    "description": "Verifies the sign-in form cannot be submitted without a password.",
+    "category": "User Signin",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a password validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Navigate from sign-in to signup via page link",
+    "description": "Verifies users can reach the registration page from the login screen.",
+    "category": "User Signin",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to create an account"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the signup page"
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Sign out from the app redirects to public landing page",
+    "description": "Verifies an authenticated user can sign out from /app and is redirected to the public site.",
+    "category": "User Signout",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Initiate the sign out action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the public landing page"
+      }
+    ]
+  },
+  {
+    "id": "TC021",
+    "title": "Sign out from app prevents access to account page",
+    "description": "Verifies that after signing out, the user no longer has an active session when navigating to an authenticated page.",
+    "category": "User Signout",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Initiate the sign out action"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /account"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user is prompted to sign in"
+      }
+    ]
+  },
+  {
+    "id": "TC022",
+    "title": "Sign out action is accessible from the app shell",
+    "description": "Verifies the app UI exposes a sign out control when the user is authenticated.",
+    "category": "User Signout",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a sign out action is available in the app navigation"
+      }
+    ]
+  },
+  {
+    "id": "TC023",
+    "title": "Signing out twice does not break navigation to public pages",
+    "description": "Verifies repeated sign out attempts do not trap the user or prevent access to the public site.",
+    "category": "User Signout",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Initiate the sign out action"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Initiate the sign out action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the public landing page"
+      }
+    ]
+  },
+  {
+    "id": "TC024",
+    "title": "Attempting to sign out from an already signed-out state keeps user on public site",
+    "description": "Verifies that when no session is present, using sign out entrypoints does not cause errors and results in a public state.",
+    "category": "User Signout",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Initiate the sign out action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the public landing page"
+      }
+    ]
+  },
+  {
+    "id": "TC025",
+    "title": "Extract comments from a valid TikTok video URL",
+    "description": "Verifies a user can extract and view comment cards from a TikTok video URL in the Komentar tab.",
+    "category": "App Dashboard - Comments Extraction",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Komentar tab"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid TikTok video URL into the video URL field"
+      },
+      {
+        "type": "action",
+        "description": "Click the action to extract comments"
+      },
+      {
+        "type": "action",
+        "description": "Wait for the extraction results to load"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify extracted comment cards are displayed with usernames and comment text"
+      }
+    ]
+  },
+  {
+    "id": "TC026",
+    "title": "Show validation/error state for invalid or unsupported video URL",
+    "description": "Verifies the comments extractor shows an error when given an invalid or unsupported URL.",
+    "category": "App Dashboard - Comments Extraction",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Komentar tab"
+      },
+      {
+        "type": "action",
+        "description": "Fill an invalid or unsupported video URL into the video URL field"
+      },
+      {
+        "type": "action",
+        "description": "Click the action to extract comments"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an error message is visible indicating the URL is invalid or comments could not be fetched"
+      }
+    ]
+  },
+  {
+    "id": "TC027",
+    "title": "Set max comments before extraction",
+    "description": "Verifies setting a max comments limit affects the extraction request and results appear.",
+    "category": "App Dashboard - Comments Extraction",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Komentar tab"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid TikTok video URL into the video URL field"
+      },
+      {
+        "type": "action",
+        "description": "Fill a small valid number into the max comments field"
+      },
+      {
+        "type": "action",
+        "description": "Click the action to extract comments"
+      },
+      {
+        "type": "action",
+        "description": "Wait for the extraction results to load"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify extracted comment cards are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC028",
+    "title": "Show required-field validation when video URL is empty",
+    "description": "Verifies the extractor prevents submission and shows a validation error when the URL field is empty.",
+    "category": "App Dashboard - Comments Extraction",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Komentar tab"
+      },
+      {
+        "type": "action",
+        "description": "Clear the video URL field"
+      },
+      {
+        "type": "action",
+        "description": "Click the action to extract comments"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a video URL validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC029",
+    "title": "Prevent invalid max comments input",
+    "description": "Verifies invalid max comments input shows a validation error and does not proceed.",
+    "category": "App Dashboard - Comments Extraction",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Komentar tab"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid TikTok video URL into the video URL field"
+      },
+      {
+        "type": "action",
+        "description": "Fill a non-numeric value into the max comments field"
+      },
+      {
+        "type": "action",
+        "description": "Click the action to extract comments"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a max comments validation error is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC030",
+    "title": "Comments extraction tab loads its primary UI",
+    "description": "Verifies the Komentar tab renders the primary controls needed for extraction.",
+    "category": "App Dashboard - Comments Extraction",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Komentar tab"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the comments extraction input controls are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC031",
+    "title": "Authenticated user can view account details and navigate to manage plan",
+    "description": "Verifies an authenticated user can access /account, see plan/quota info, and navigate to /payment via manage plan.",
+    "category": "Account Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /account"
+      },
+      {
+        "type": "action",
+        "description": "Click the manage plan action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the payment page"
+      }
+    ]
+  },
+  {
+    "id": "TC032",
+    "title": "Account page shows quota ring and plan features for authenticated user",
+    "description": "Verifies the account page displays daily quota usage and current plan information after signing in.",
+    "category": "Account Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /account"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the quota usage ring and current plan details are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC033",
+    "title": "Unauthenticated access to /account prompts authentication",
+    "description": "Verifies navigating to the account page while unauthenticated redirects to sign-in or shows an authentication prompt.",
+    "category": "Account Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /account"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user is redirected to a sign-in view or prompted to authenticate"
+      }
+    ]
+  },
+  {
+    "id": "TC034",
+    "title": "Account page quick link navigates back to the app",
+    "description": "Verifies the account page provides a working quick link to return to the main app dashboard.",
+    "category": "Account Page",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signin"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sign-in form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /account"
+      },
+      {
+        "type": "action",
+        "description": "Click the quick link to return to the app"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the app dashboard"
+      }
+    ]
+  },
+  {
+    "id": "TC035",
+    "title": "Payment page loads plan cards and details",
+    "description": "Verifies the pricing page displays available plan options and their details.",
+    "category": "Payment Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /payment"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify multiple plan options are displayed with pricing and plan details"
+      }
+    ]
+  },
+  {
+    "id": "TC036",
+    "title": "Selecting a plan initiates upgrade flow (redirect away from site)",
+    "description": "Verifies clicking an upgrade action on a plan navigates away to the checkout flow.",
+    "category": "Payment Page",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /payment"
+      },
+      {
+        "type": "action",
+        "description": "Click the upgrade action on a paid plan"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the browser navigates away from the app to an external checkout"
+      }
+    ]
+  },
+  {
+    "id": "TC037",
+    "title": "Navigate through main sidebar destinations and load content",
+    "description": "Verifies the sidebar can navigate to Beranda, Riset, and Akun and the target page content loads.",
+    "category": "Sidebar Navigation",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Use the sidebar to go to the Beranda view"
+      },
+      {
+        "type": "action",
+        "description": "Use the sidebar to go to the Riset view"
+      },
+      {
+        "type": "action",
+        "description": "Click the Akun link in the sidebar"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the account page content is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC038",
+    "title": "Sign out from sidebar and return to landing page",
+    "description": "Verifies signing out from the sidebar redirects to the landing page and ends the session in the UI.",
+    "category": "Sidebar Navigation",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Use the sidebar to initiate sign out"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the landing page"
+      }
+    ]
+  },
+  {
+    "id": "TC039",
+    "title": "Sidebar billing link opens pricing/plan selection",
+    "description": "Verifies the sidebar Billing navigation takes the user to the pricing and plan selection page.",
+    "category": "Sidebar Navigation",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Billing link in the sidebar"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify pricing and plan selection content is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC040",
+    "title": "Upgrade to Pro from sidebar navigates to payment page",
+    "description": "Verifies the Upgrade to Pro action in the sidebar takes the user to the payment page.",
+    "category": "Sidebar Navigation",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Upgrade to Pro button in the sidebar"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify pricing and plan selection content is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC041",
+    "title": "Account page can be reached directly from app via sidebar",
+    "description": "Verifies the account page is reachable via the sidebar and shows plan/quota information.",
+    "category": "Sidebar Navigation",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Akun link in the sidebar"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify plan and quota information is displayed on the account page"
+      }
+    ]
+  },
+  {
+    "id": "TC042",
+    "title": "Sidebar remains usable after navigating to payment and returning to app",
+    "description": "Verifies a cross-page journey using the sidebar still allows returning to the app workspace.",
+    "category": "Sidebar Navigation",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Click the Billing link in the sidebar"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Use the sidebar to go to the Riset view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the Riset view primary content is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC043",
+    "title": "Sign out removes access to authenticated-only account page in current session",
+    "description": "Verifies after signing out, attempting to access the account page does not show account content.",
+    "category": "Sidebar Navigation",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /app"
+      },
+      {
+        "type": "action",
+        "description": "Use the sidebar to initiate sign out"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /account"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify account page content is not displayed"
+      }
+    ]
+  }
+]

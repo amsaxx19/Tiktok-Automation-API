@@ -1,0 +1,8 @@
+{
+  "url": "https://mon.tiktokv.com/monitor_browser/collect/batch/?biz_id=tiktok_reflow_m",
+  "status": 204,
+  "content_type": "application/json; charset=utf-8",
+  "timing": "14.7s",
+  "has_product_data": false,
+  "body": null
+}

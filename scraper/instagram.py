@@ -46,7 +46,7 @@ class InstagramScraper(BaseScraper):
         response = await session.fetch(
             url,
             wait_selector='a[href*="/reel/"], a[href*="/p/"]',
-            timeout=15000,
+            timeout=25000,
         )
         if response.status != 200:
             return []

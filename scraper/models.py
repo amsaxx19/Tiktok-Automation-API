@@ -30,6 +30,16 @@ class VideoResult:
     transcript: str = ""
     transcript_source: str = ""
     hashtags: list = field(default_factory=list)
+    # Insight fields (derived by enrich_result_text)
+    hook_type: str = ""
+    hook_score: str = ""
+    cta_type: str = ""
+    angle: str = ""
+    content_idea: str = ""
+    # Commerce / affiliate product fields
+    products: list = field(default_factory=list)  # list of TikTokProduct dicts
+    has_affiliate: bool = False
+    commerce_signals: list = field(default_factory=list)  # text signals detected
 
     def to_dict(self):
         return asdict(self)

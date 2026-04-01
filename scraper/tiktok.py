@@ -9,12 +9,18 @@ from scraper.base import BaseScraper
 from scraper.models import VideoResult
 import httpx
 
+try:
+    from scraper.tiktok_shop import TikTokShopScraper
+    _SHOP_AVAILABLE = True
+except ImportError:
+    _SHOP_AVAILABLE = False
+
 
 class TikTokScraper(BaseScraper):
     platform = "tiktok"
     PROFILE_FETCH_TIMEOUT_MS = 15000
-    VIDEO_FETCH_TIMEOUT_MS = 12000
-    SEARCH_FETCH_TIMEOUT_MS = 16000
+    VIDEO_FETCH_TIMEOUT_MS = 20000
+    SEARCH_FETCH_TIMEOUT_MS = 25000
 
     @staticmethod
     def _parse_int(value) -> int | None:
@@ -70,14 +76,18 @@ class TikTokScraper(BaseScraper):
                 except Exception as e:
                     print(f"[TikTok] Failed to inject cookie: {e}")
 
-            response = await session.fetch(
-                url,
-                wait_selector='a[href*="/video/"]',
-                timeout=self.SEARCH_FETCH_TIMEOUT_MS,
-            )
+            try:
+                response = await session.fetch(
+                    url,
+                    wait_selector='a[href*="/video/"]',
+                    timeout=self.SEARCH_FETCH_TIMEOUT_MS,
+                )
+            except Exception as exc:
+                print(f"[TikTok] Native search failed: {exc}")
+                return await self._fallback_search(keyword, max_results, min_likes, max_likes, date_from, date_to)
             if response.status != 200:
                 print(f"[TikTok] Failed with status {response.status}")
-                return []
+                return await self._fallback_search(keyword, max_results, min_likes, max_likes, date_from, date_to)
 
             video_links = response.css('a[href*="/video/"]')
             urls = []
@@ -95,6 +105,9 @@ class TikTokScraper(BaseScraper):
                     urls.append(href)
                 if len(urls) >= target_count:
                     break
+
+            if not urls:
+                return await self._fallback_search(keyword, max_results, min_likes, max_likes, date_from, date_to)
 
             print(f"[TikTok] Found {len(urls)} video URLs, fetching details concurrently...")
 
@@ -124,7 +137,69 @@ class TikTokScraper(BaseScraper):
         elif sort == "oldest":
             results.sort(key=lambda r: r.upload_date or "")
 
+        if len(results) < max_results:
+            fallback_results = await self._fallback_search(
+                keyword,
+                max_results - len(results),
+                min_likes,
+                max_likes,
+                date_from,
+                date_to,
+            )
+            seen_urls = {item.video_url for item in results}
+            for item in fallback_results:
+                if item.video_url not in seen_urls:
+                    results.append(item)
+                    seen_urls.add(item.video_url)
+                if len(results) >= max_results:
+                    break
+
         return results
+
+    async def _fallback_search(
+        self,
+        keyword: str,
+        max_results: int,
+        min_likes: int | None = None,
+        max_likes: int | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[VideoResult]:
+        if max_results <= 0:
+            return []
+        print(f"[TikTok] Falling back to Google discovery for: {keyword}")
+        async with AsyncStealthySession(headless=True) as session:
+            urls = await self._google_discover_urls(
+                session,
+                f'site:tiktok.com "/video/" {keyword}',
+                ["tiktok.com"],
+                ["/video/"],
+                max_results=max_results * 2,
+            )
+            if not urls:
+                return [
+                    self._make_placeholder_result(
+                        keyword,
+                        f"https://www.tiktok.com/search?q={quote(keyword)}",
+                        title=f"TikTok search fallback: {keyword}",
+                        description=f"Fallback link ke pencarian TikTok untuk keyword '{keyword}'.",
+                    )
+                ]
+
+            tasks = [self._scrape_video(session, item_url, keyword) for item_url in urls[:max_results * 2]]
+            raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+            results = []
+            for index, item in enumerate(raw_results):
+                if isinstance(item, Exception):
+                    print(f"[TikTok] Fallback scrape error: {item}")
+                    item = None
+                if item and self._passes_filters(item, min_likes, max_likes, date_from, date_to):
+                    results.append(item)
+                elif item is None:
+                    results.append(self._make_placeholder_result(keyword, urls[index], title=f"Video TikTok: {keyword}"))
+                if len(results) >= max_results:
+                    break
+            return results[:max_results]
 
     async def scrape_profile(
         self,
@@ -365,6 +440,22 @@ class TikTokScraper(BaseScraper):
                 transcript = caption_clean
                 transcript_source = "caption"
 
+        # Detect commerce / affiliate products in video
+        commerce_signals = []
+        has_affiliate = False
+        if _SHOP_AVAILABLE:
+            try:
+                commerce = TikTokShopScraper.detect_commerce_in_item(item)
+                if commerce:
+                    has_affiliate = True
+                    commerce_signals = commerce.get("text_signals", []) or []
+                    if commerce.get("anchors"):
+                        commerce_signals.append("product_anchor")
+                    if commerce.get("commerce_info"):
+                        commerce_signals.append("commerce_info")
+            except Exception as e:
+                print(f"[TikTok] Commerce detection error: {e}")
+
         return VideoResult(
             platform="tiktok",
             keyword=keyword,
@@ -386,6 +477,8 @@ class TikTokScraper(BaseScraper):
             transcript=transcript,
             transcript_source=transcript_source,
             hashtags=hashtags,
+            has_affiliate=has_affiliate,
+            commerce_signals=commerce_signals,
         )
 
     def _scrape_video_meta_fallback(self, response, url: str, keyword: str) -> VideoResult | None:

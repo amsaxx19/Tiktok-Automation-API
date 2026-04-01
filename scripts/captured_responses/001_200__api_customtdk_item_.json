@@ -1,0 +1,20 @@
+{
+  "url": "https://www.tiktok.com/api/customtdk/item/?aid=1988&app_language=id-ID&app_name=tiktok_web&browser_language=id-ID&browser_name=Mozilla&browser_online=true&browser_platform=MacIntel&browser_version=5.0%20%28Linux%3B%20Android%2013%3B%20Pixel%207%29%20AppleWebKit%2F537.36%20%28KHTML%2C%20like%20Gecko%29%20Chrome%2F124.0.0.0%20Mobile%20Safari%2F537.36&channel=tiktok_web&clientAbVersionIds=70508271&clientAbVersionIds=75204946&clientAbVersionIds=75637792&clientAbVersionIds=75665225&clientAbVersionIds=75676921&clientAbVersionIds=75687818&clientAbVersionIds=75766107&clientAbVersionIds=73004916&clientAbVersionIds=73281058&clientAbVersionIds=73281067&clientAbVersionIds=73282888&clientAbVersionIds=73549932&clientAbVersionIds=73841972&clientAbVersionIds=74276214&clientAbVersionIds=74276218&clientAbVersionIds=74736088&clientAbVersionIds=73675307&clientAbVersionIds=72980288&clientAbVersionIds=75697242&clientAbVersionIds=72912489&cookie_enabled=true&data_collection_enabled=false&device_id=7622635127713220113&device_platform=web_mobile&focus_state=true&from_page=video&history_len=2&is_fullscreen=false&is_page_visible=true&itemId=7622536313668979976&os=android&priority_region=&referer=&region=ID&screen_height=915&screen_width=412&tz_name=Australia%2FSydney&user_is_login=false&webcast_language=id-ID",
+  "status": 200,
+  "content_type": "application/json; charset=utf-8",
+  "timing": "7.4s",
+  "has_product_data": false,
+  "body": {
+    "extra": {
+      "fatal_item_ids": [],
+      "logid": "20260329191732B5C0233406CA38DA0562",
+      "now": 1774783052000
+    },
+    "log_pb": {
+      "impr_id": "20260329191732B5C0233406CA38DA0562"
+    },
+    "statusCode": 0,
+    "status_code": 0,
+    "status_msg": ""
+  }
+}

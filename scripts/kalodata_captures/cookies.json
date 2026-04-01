@@ -1,0 +1,444 @@
+[
+  {
+    "name": "page_session",
+    "value": "9fd0eb70-4b3c-43e3-9ddc-628ba14c8905",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "SESSION",
+    "value": "MDU1MDRmODctODc3ZC00ODNlLWE0MzItODhjY2FmOWIxYWM1",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1776086775.060372,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_twpid",
+    "value": "tw.1774790775994.488053111650047196",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1808486780.121872,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "_ttp",
+    "value": "3BcaO3VoOmgwXVj0LX9qOB0FDU4",
+    "domain": ".tiktok.com",
+    "path": "/",
+    "expires": 1808486776.192357,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "muc_ads",
+    "value": "c6e1f550-1176-4276-a00e-bdebffa2485f",
+    "domain": ".t.co",
+    "path": "/",
+    "expires": 1809350776.577454,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "smidV2",
+    "value": "20260330002616e8d5250453a810639f24df6710a564ed006fba9291ff4b690",
+    "domain": "www.kalodata.com",
+    "path": "/",
+    "expires": 1809350776.591442,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "appVersion",
+    "value": "2.0",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1806326776,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "deviceType",
+    "value": "pc",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1806326776,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "guest_id_marketing",
+    "value": "v1%3A177479077657283040",
+    "domain": ".twitter.com",
+    "path": "/",
+    "expires": 1809350776.651743,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "guest_id_ads",
+    "value": "v1%3A177479077657283040",
+    "domain": ".twitter.com",
+    "path": "/",
+    "expires": 1809350776.651764,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "personalization_id",
+    "value": "\"v1_3is8ssNrk2zQzpkVrF9o3g==\"",
+    "domain": ".twitter.com",
+    "path": "/",
+    "expires": 1809350776.651769,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "guest_id",
+    "value": "v1%3A177479077657283040",
+    "domain": ".twitter.com",
+    "path": "/",
+    "expires": 1809350776.651774,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.1.106686050.1774790777",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1809350776.702927,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_ga_Q21FRKKG88",
+    "value": "GS2.1.s1774790776$o1$g0$t1774790776$j60$l0$h0",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1809350776.716584,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_tt_enable_cookie",
+    "value": "1",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1808486776,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_ttp",
+    "value": "01KMWWC5XBQEY1TGPDHMYNKG2Y_.tt.1",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1808486776,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_uetsid",
+    "value": "dd7ec3002b7211f1988c85d3e2fdfeca",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1774877176,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_uetvid",
+    "value": "dd7eebc02b7211f1a20d8baeb46a6e64",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1808486776,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "deviceId",
+    "value": "984cbd047b3bb379492505d4ffdf2399",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1806326776,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "HMACCOUNT_BFESS",
+    "value": "CB127525F1C1B7CC",
+    "domain": ".hm.baidu.com",
+    "path": "/",
+    "expires": 1809350776.984877,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MUID",
+    "value": "0B045522242368992F85420925FD690C",
+    "domain": ".bing.com",
+    "path": "/",
+    "expires": 1808486779.786455,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MR",
+    "value": "0",
+    "domain": ".bat.bing.com",
+    "path": "/",
+    "expires": 1775395576.98522,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_cfuvid",
+    "value": "QLvvlKvpCAgTZ9F0Ahu8LX9iwpNjtYlfspkFX1dqZQg-1774790776.8610814-1.0.1.1-1uwf66NTojJTx_QKtTTnGuGye0kjSpP5Z2nivKINZ.Y",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_fbp",
+    "value": "fb.1.1774790777602.632758857626707295",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1782566780,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "Hm_lvt_8aa1693861618ac63989ae373e684811",
+    "value": "1774790778",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1806326777,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "Hm_lpvt_8aa1693861618ac63989ae373e684811",
+    "value": "1774790778",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "HMACCOUNT",
+    "value": "CB127525F1C1B7CC",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "cf_clearance",
+    "value": "Wzi9h1KFMdNDI.JiTkhIaK9gFVqTK_uoj.njlH3Vs4g-1774790777-1.2.1.1-Sr4ttmjjEkDnBteuT8QOLk.Qmz.HtleOSq58zBuFWwOcjRZ8LfCk72cGZ3CP3KuQ03uqpPvn44skMLdbwpJKTwtX4q0S9iz4a8TNxwCXZpKBWCYo58P0YiPumFuJ0TDSW57nOCx3TfEtCSDNfkk1m_a_nGD5V3RCK0oO7TPQOeBdzy08weBTA6hzpO98N6Z5gleN5qPU3ekZyooP5EYPhIhXqv5V4n7HHJnhJKAkmcQ",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1806326777.648876,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://kalodata.com",
+    "_crHasCrossSiteAncestor": false
+  },
+  {
+    "name": "CLID",
+    "value": "9829d55e954848818bf38d4eb56555e5.20260329.20270329",
+    "domain": "www.clarity.ms",
+    "path": "/",
+    "expires": 1806326777.732429,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_c_WBKFRo",
+    "value": "C98Ta0A8wXgpUh265SNKuPGgMC38hgfSjiKLABWn",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1806326777,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_nb_ioWEgULi",
+    "value": "",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_clck",
+    "value": "10axflc%5E2%5Eg4r%5E0%5E2279",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1806326778,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "MR",
+    "value": "0",
+    "domain": ".c.bing.com",
+    "path": "/",
+    "expires": 1775395579.786517,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "SRM_B",
+    "value": "0B045522242368992F85420925FD690C",
+    "domain": ".c.bing.com",
+    "path": "/",
+    "expires": 1808486779.786541,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "SM",
+    "value": "C",
+    "domain": ".c.clarity.ms",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MUID",
+    "value": "0B045522242368992F85420925FD690C",
+    "domain": ".clarity.ms",
+    "path": "/",
+    "expires": 1808486778.948108,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MR",
+    "value": "0",
+    "domain": ".c.clarity.ms",
+    "path": "/",
+    "expires": 1775395578.948125,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "ANONCHK",
+    "value": "0",
+    "domain": ".c.clarity.ms",
+    "path": "/",
+    "expires": 1774791378.948135,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_clsk",
+    "value": "g47u7b%5E1774790779361%5E1%5E1%5El.clarity.ms%2Fcollect",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1774877179,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": ".thumbcache_211a882976e013454a0403b9c1967076",
+    "value": "MNvGOEvrGNJU6yv4xeQugoc5E3VOjpzAl5kQIAuG0949Rt8D8r0U0zhWPFvrgREdUWzXt4blJMjnLnTz2ZjIgg%3D%3D",
+    "domain": "www.kalodata.com",
+    "path": "/",
+    "expires": 1809350779.605195,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_gcl_au",
+    "value": "1.1.606275799.1774790777.1942838329.1774790780.1774790779",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1782566777,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "IDE",
+    "value": "AHWqTUmPDEWoqgn9iLbLoumULkroYHZ7r4ef7Xz8tpbLkP3LQoAhjSZpnHh8A7M9",
+    "domain": ".doubleclick.net",
+    "path": "/",
+    "expires": 1809350779.886896,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "ttcsid_CM9SHDBC77U4KJBR96OG",
+    "value": "1774790776748::MOEEv19Xg2dbIp2sByba.1.1774790780125.0",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1808486780,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "ttcsid",
+    "value": "1774790776749::FJGiDqYEzJPZTzO8TjNE.1.1774790780125.0",
+    "domain": ".kalodata.com",
+    "path": "/",
+    "expires": 1808486780,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]

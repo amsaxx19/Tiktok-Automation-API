@@ -5,7 +5,7 @@ python-multipart==0.0.22
 starlette==1.0.0
 
 # HTTP clients
-httpx==0.28.1
+httpx[http2]==0.28.1
 
 # Scraping engine (installs Playwright + stealth fingerprinting)
 scrapling[all]==0.4.2

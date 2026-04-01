@@ -1,0 +1,143 @@
+[
+  {
+    "method": "GET",
+    "url": "https://t.co/i/adsct?bci=4&cv=18%260&dv=Australia%2FSydney%26en-US%26Google%20Inc.%26MacIntel%26127%261280%26900%2610%2624%261280%26900%260%26na&eci=2&email_address=3ac9c55f6f2e857a187201cb08cd6ab0bd05b89f230eb0eb159833a55760478f&event_id=7e237ff4-5964-462e-8646-cbc9d04fb83a&events=%5B%5B%22autobutt",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "accept-language": "en-US",
+      "sec-ch-ua-mobile": "?0"
+    },
+    "post_data": null
+  },
+  {
+    "method": "GET",
+    "url": "https://analytics.twitter.com/i/adsct?bci=4&cv=18%260&dv=Australia%2FSydney%26en-US%26Google%20Inc.%26MacIntel%26127%261280%26900%2610%2624%261280%26900%260%26na&eci=2&email_address=3ac9c55f6f2e857a187201cb08cd6ab0bd05b89f230eb0eb159833a55760478f&event_id=7e237ff4-5964-462e-8646-cbc9d04fb83a&events=",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "accept-language": "en-US",
+      "sec-ch-ua-mobile": "?0"
+    },
+    "post_data": null
+  },
+  {
+    "method": "POST",
+    "url": "https://www.kalodata.com/user/login",
+    "headers": {
+      "language": "en-US",
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/login",
+      "accept-language": "en-US",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "currency": "USD",
+      "sec-ch-ua-mobile": "?0",
+      "country": "US",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json"
+    },
+    "post_data": "{\"scene\":\"login\",\"loginMethod\":\"EMAIL_PASSWORD\",\"tcCode\":\"\",\"email\":\"amosthiosa1999@gmail.com\",\"emailPassword\":\"Amoskeren_90\"}"
+  },
+  {
+    "method": "GET",
+    "url": "https://www.google.com/pagead/1p-user-list/11187366043/?random=1774791118475&cv=11&fst=1774789200000&bg=ffffff&guid=ON&async=1&en=form_start&gtm=45je63p1h1v893801310za200zd893801310xec&gcd=13l3l3l3l1l1&dma=0&tag_exp=0~115938465~115938468~117484252~117512543~117884344&u_w=1280&u_h=900&url=https%3A%2F",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "accept-language": "en-US",
+      "sec-ch-ua-mobile": "?0"
+    },
+    "post_data": null
+  },
+  {
+    "method": "GET",
+    "url": "https://www.google.com.au/pagead/1p-user-list/11187366043/?random=1774791118475&cv=11&fst=1774789200000&bg=ffffff&guid=ON&async=1&en=form_start&gtm=45je63p1h1v893801310za200zd893801310xec&gcd=13l3l3l3l1l1&dma=0&tag_exp=0~115938465~115938468~117484252~117512543~117884344&u_w=1280&u_h=900&url=https%3A",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "accept-language": "en-US",
+      "sec-ch-ua-mobile": "?0"
+    },
+    "post_data": null
+  },
+  {
+    "method": "GET",
+    "url": "https://www.google.com/pagead/1p-user-list/18005798294/?random=1774791118482&cv=11&fst=1774789200000&bg=ffffff&guid=ON&async=1&en=form_start&gtm=45be63p1h1v9245834070za200zb893801310zd893801310xec&gcd=13l3l3l3l1l1&dma=0&tag_exp=0~115938465~115938468~117266400~117484252~118128923&u_w=1280&u_h=900&url",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "accept-language": "en-US",
+      "sec-ch-ua-mobile": "?0"
+    },
+    "post_data": null
+  },
+  {
+    "method": "GET",
+    "url": "https://www.google.com.au/pagead/1p-user-list/18005798294/?random=1774791118482&cv=11&fst=1774789200000&bg=ffffff&guid=ON&async=1&en=form_start&gtm=45be63p1h1v9245834070za200zb893801310zd893801310xec&gcd=13l3l3l3l1l1&dma=0&tag_exp=0~115938465~115938468~117266400~117484252~118128923&u_w=1280&u_h=900&",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "accept-language": "en-US",
+      "sec-ch-ua-mobile": "?0"
+    },
+    "post_data": null
+  },
+  {
+    "method": "POST",
+    "url": "https://www.kalodata.com/cdn-cgi/rum?",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/login",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "content-type": "application/json",
+      "sec-ch-ua-mobile": "?0",
+      "accept-language": "en-US"
+    },
+    "post_data": "{\"resources\":[],\"referrer\":\"\",\"eventType\":1,\"firstPaint\":784,\"firstContentfulPaint\":864,\"startTime\":1774791113178.5,\"versions\":{\"fl\":\"2024.11.0\",\"js\":\"2026.2.0\",\"timings\":1},\"pageloadId\":\"70a76992-df82-45da-8acc-e1a69d69be19\",\"location\":\"https://www.kalodata.com/login\",\"nt\":\"navigate\",\"timingsV2\":{\"nextHopProtocol\":\"h2\",\"transferSize\":6222,\"decodedBodySize\":13065},\"dt\":\"\",\"siteToken\":\"a7ba940d9de94888b8a6b0bfcab9e079\",\"st\":2}"
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google-analytics.com/g/collect?v=2&tid=G-Q21FRKKG88&gtm=45je63p1h1v893801310za200zd893801310&_p=1774791113954&gcd=13l3l3l3l1l1&npa=0&dma=0&cid=1110925262.1774791115&ul=en-us&sr=1280x900&uaa=x86&uab=64&uafvl=Not%253AA-Brand%3B99.0.0.0%7CHeadlessChrome%3B145.0.7632.6%7CChromium%3B145.0.763",
+    "headers": {
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "accept-language": "en-US",
+      "sec-ch-ua-mobile": "?0"
+    },
+    "post_data": null
+  },
+  {
+    "method": "POST",
+    "url": "https://www.kalodata.com/api/log",
+    "headers": {
+      "language": "en-US",
+      "sec-ch-ua-platform": "\"macOS\"",
+      "referer": "https://www.kalodata.com/login",
+      "accept-language": "en-US",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"",
+      "currency": "USD",
+      "sec-ch-ua-mobile": "?0",
+      "country": "US",
+      "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36",
+      "accept": "application/json, text/plain, */*",
+      "content-type": "application/json"
+    },
+    "post_data": "[{\"session_id\":\"b06f38db-ed2f-432e-b321-4bedc7865ca6\",\"kalo_uuid\":\"984cbd047b3bb379492505d4ffdf23991774791115218\",\"network_type\":\"4g\",\"device_type\":\"pc\",\"os_type\":\"Mac OS\",\"medium_type\":\"browser\",\"medium_name\":\"Chrome\",\"kalo_version\":\"2.1.0\",\"env\":\"production\",\"ua\":\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36\",\"kalo_referrer\":\"\",\"project\":\"tiktok\",\"url\":\"https://www.kalodata.com/login\",\"kalo_event_time\":1774791118486,\"kalo_event_name\":\"input\""
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:8000",
+  "executionArgs": {
+    "projectName": "Tiktok-Automation-API",
+    "projectPath": "/Users/amosthiosa/Tiktok-Automation-API",
+    "testIds": [],
+    "additionalInstruction": "Focus on login/signin/signup flows to verify database connectivity. The app uses Supabase Auth. For signin tests, use test credentials if available or test the form validation and error handling. The signup page is at /signup and signin at /signin. The forms use Indonesian language labels (Daftar for Register, Masuk for Login). After successful signin the user should be redirected to /app.",
+    "serverMode": "development",
+    "envs": {
+      "API_KEY": "sk-user-Zx2iBEerFpzvIemvFyckG-Sud3kk8jFaeNDgBpfeHUPm5TPdUbEZ3nmPHSuVbpKusXlA8FA5noa2DYeo774jeaybBdtdhliJGHB0AzCNkdpHW98dSCWeplCuM9xJvgeFZ3s"
+    }
+  }
+}
